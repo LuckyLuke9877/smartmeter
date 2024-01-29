@@ -26,3 +26,5 @@ target_link_libraries(${MODULE_NAME}
         GTest::gtest
         GTest::gtest_main
 )
+
+# enable_testing() #to  discover tests in test explorer 

@@ -5,20 +5,19 @@ using namespace sunspec;
 
 namespace
 {
+constexpr uint8_t MODBUS_ADDRESS = 0x01;
+constexpr auto    VALUE1         = 1.1f;
+constexpr auto    VALUE2         = 22.22f;
+constexpr auto    VALUE3         = 333.333f;
+constexpr auto    VALUE4         = 0.4444f;
 
-    constexpr uint8_t MODBUS_ADDRESS = 0x01;
-    constexpr auto VALUE1 = 1.1f;
-    constexpr auto VALUE2 = 22.22f;
-    constexpr auto VALUE3 = 333.333f;
-    constexpr auto VALUE4 = 0.4444f;
-
-    // Use other conversion method for test
-    float to_float_little_endian(uint16_t *reg)
-    {
-        // Note: cannot direct cast to float => wrong result!!
-        uint32_t tempUint32 = __builtin_bswap32(*(uint32_t *)reg);
-        return *(reinterpret_cast<float *>(&tempUint32));
-    }
+// Use other conversion method for test
+float to_float_little_endian(uint16_t* reg)
+{
+    // Note: cannot direct cast to float => wrong result!!
+    uint32_t tempUint32 = __builtin_bswap32(*(uint32_t*)reg);
+    return *(reinterpret_cast<float*>(&tempUint32));
+}
 
 } // namespace
 
@@ -45,7 +44,7 @@ TEST_F(SunspecMeterModelTest, Constructor_InitializedRegisters)
     // uint32_be: 0x53 6e 75 53
     ASSERT_EQ(reg[0], 0x7553);
     ASSERT_EQ(reg[1], 0x536e);
-    ASSERT_EQ(__builtin_bswap32(*(uint32_t *)&reg[0]), 0x53756e53); // same test as before
+    ASSERT_EQ(__builtin_bswap32(*(uint32_t*)&reg[0]), 0x53756e53); // same test as before
     ASSERT_EQ(__builtin_bswap16(reg[2]), 1);
     ASSERT_EQ(__builtin_bswap16(reg[3]), 65);
     ASSERT_EQ(__builtin_bswap16(reg[4]), 0x3A29); // ":)"

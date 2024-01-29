@@ -2,7 +2,7 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "default",
+            "name": "GTest",
             "binaryDir": "build",
             "generator": "Ninja Multi-Config",
             "cacheVariables": {
@@ -14,12 +14,12 @@
     "buildPresets": [
         {
             "name": "debug",
-            "configurePreset": "default",
+            "configurePreset": "GTest",
             "configuration": "Debug"
         },
         {
             "name": "release",
-            "configurePreset": "default",
+            "configurePreset": "GTest",
             "configuration": "Release"
         }
     ]
