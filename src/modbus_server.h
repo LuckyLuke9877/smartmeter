@@ -1,8 +1,8 @@
 #pragma once
 
 #ifndef GTEST
-#include "esphome/components/uart/uart.h"
-#include "esphome/core/helpers.h"
+    #include "esphome/components/uart/uart.h"
+    #include "esphome/core/helpers.h"
 #endif
 
 #include <functional>
@@ -30,45 +30,59 @@ public:
     {
         enum ErrorCode
         {
-            NONE             = 0x00,
+            NONE = 0x00,
             ILLEGAL_FUNCTION = 0X01,
-            ILLEGAL_ADDRESS  = 0X02,
-            ILLEGAL_VALUE    = 0X03
+            ILLEGAL_ADDRESS = 0X02,
+            ILLEGAL_VALUE = 0X03,
+            DEVICE_FAILURE = 0X04
         };
 
-        ErrorCode            errorCode{ErrorCode::NONE};
-        std::vector<uint8_t> data;
-
-        void set_error(ErrorCode error) { errorCode = error; }
-
-        void add_payload(const std::vector<uint8_t>& payload)
+        void set_error(ErrorCode error)
         {
-            const auto dataSize = data.size();
-            data.resize(dataSize + payload.size());
-            std::copy(payload.begin(), payload.end(), data.begin() + dataSize);
+            errorCode = error;
         }
 
-        std::vector<uint8_t> get_payload(uint8_t address, uint8_t function_code)
+        uint8_t* GetDataBuffer(uint16_t size)
+        {
+            const auto bufferLimit = 1024U;
+            if (size > bufferLimit)
+            {
+                return nullptr;
+            }
+
+            buffer.resize(size + headerSize);
+
+            return &buffer[headerSize];
+        }
+
+        const std::vector<uint8_t>& get_payload(uint8_t address, uint8_t function_code)
         {
             if (errorCode != ErrorCode::NONE)
             {
                 // error code
                 function_code |= 0x80;
-                data.clear();
-                data.push_back(errorCode);
+                buffer.resize(headerSize);
+                buffer[2] = errorCode;
             }
             else
             {
-                // add first param "ByteCount"
-                data.insert(data.begin(), static_cast<uint8_t>(data.size()));
+                if (buffer.size() < headerSize)
+                {
+                    buffer.resize(headerSize);
+                }
+                // set first param "byte_count"
+                buffer[2] = buffer.size() - headerSize;
             }
-            std::vector<uint8_t> payload(data.size() + 2);
-            payload[0] = address;
-            payload[1] = function_code;
-            std::copy(data.begin(), data.end(), payload.begin() + 2);
+            buffer[0] = address;
+            buffer[1] = function_code;
 
-            return payload;
+            return buffer;
         }
+
+    private:
+        const uint16_t       headerSize{3}; // address + function_code + byte_count or error
+        ErrorCode            errorCode{ErrorCode::NONE};
+        std::vector<uint8_t> buffer; // to prevent memory copy, it contains header & data
     };
 
     using on_receive_request = std::function<ResponseRead(uint8_t function_code, const RequestRead& request)>;
@@ -147,10 +161,10 @@ protected:
             return 0; // need more data
         }
 
-        const auto begin         = rx_buffer_.begin();
-        uint8_t    address       = *(begin + 0);
+        const auto begin = rx_buffer_.begin();
+        uint8_t    address = *(begin + 0);
         const auto function_code = *(begin + 1);
-        const auto frame_size    = get_frame_size(function_code);
+        const auto frame_size = get_frame_size(function_code);
         if (frame_size == 0)
         {
             ESP_LOGD(TAG, "Modbus function-code %02x not supported or invalid frame", function_code);
@@ -164,8 +178,8 @@ protected:
 
         // Validate crc
         uint16_t computed_crc = crc16(&*begin, frame_size - 2);
-        uint16_t remote_crc =
-            static_cast<uint16_t>(*(begin + frame_size - 2)) | (static_cast<uint16_t>(*(begin + frame_size - 1)) << 8);
+        uint16_t remote_crc = static_cast<uint16_t>(*(begin + frame_size - 2))
+            | (static_cast<uint16_t>(*(begin + frame_size - 1)) << 8);
         if (computed_crc != remote_crc)
         {
             ESP_LOGD(TAG, "Invalid CRC");

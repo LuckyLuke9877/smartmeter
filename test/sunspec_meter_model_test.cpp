@@ -6,10 +6,10 @@ using namespace sunspec;
 namespace
 {
 constexpr uint8_t MODBUS_ADDRESS = 0x01;
-constexpr auto    VALUE1         = 1.1f;
-constexpr auto    VALUE2         = 22.22f;
-constexpr auto    VALUE3         = 333.333f;
-constexpr auto    VALUE4         = 0.4444f;
+constexpr auto    VALUE1 = 1.1f;
+constexpr auto    VALUE2 = 22.22f;
+constexpr auto    VALUE3 = 333.333f;
+constexpr auto    VALUE4 = 0.4444f;
 
 // Use other conversion method for test
 float to_float_little_endian(uint16_t* reg)

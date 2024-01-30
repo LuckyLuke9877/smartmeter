@@ -13,13 +13,14 @@ namespace sunspec
 // The smallest data element ( called register ) is uint16 ( e.g. a float32 requires 2 registers)
 // Values are converted from little to big endian
 
-constexpr auto REGISTER_OFFSET       = 40000;
+constexpr auto REGISTER_OFFSET = 40000;
 constexpr auto REGISTER_COMMON_COUNT = 4 + 65;
-constexpr auto REGISTER_METER_COUNT  = 2 + 124;
-constexpr auto REGISTER_END_COUNT    = 2;
-constexpr auto REGISTER_TOTAL_COUNT  = REGISTER_COMMON_COUNT + REGISTER_METER_COUNT + REGISTER_END_COUNT;
+constexpr auto REGISTER_METER_COUNT = 2 + 124;
+constexpr auto REGISTER_END_COUNT = 2;
+constexpr auto REGISTER_TOTAL_COUNT = REGISTER_COMMON_COUNT + REGISTER_METER_COUNT + REGISTER_END_COUNT;
 
-template <typename T> T convert_big_endian(T n)
+template <typename T>
+T convert_big_endian(T n)
 {
     T m;
     for (size_t i = 0; i < sizeof(T); i++)
@@ -56,7 +57,7 @@ public:
         SetRegisterUint16(68, modbusAddress);
 
         // Meter block
-        SetRegisterUint16(69, 213);                      // float, 3-phase meter.
+        SetRegisterUint16(69, 213); // float, 3-phase meter.
         SetRegisterUint16(70, REGISTER_METER_COUNT - 2); // Number of registers in this block following this entry
 
         // End block
@@ -76,7 +77,10 @@ public:
     {
         SetFloats(87, {average, phaseAB, phaseBC, phaseCA});
     }
-    void SetFrequency(float value) { SetFloats(95, {value}); }
+    void SetFrequency(float value)
+    {
+        SetFloats(95, {value});
+    }
     void SetPower(float total, float phaseA, float phaseB, float phaseC)
     {
         SetFloats(97, {total, phaseA, phaseB, phaseC});
@@ -109,14 +113,12 @@ public:
     {
         SetFloats(153, {total, phaseA, phaseB, phaseC});
     }
-    // SetEvents???
     // Rest is not needed
 
     std::vector<uint16_t> GetRegister(uint32_t registerAddress, uint8_t registerCount)
     {
-        // registerAddress is already REGISTER_OFFSET-based! (e.g. sunspec-address: 40001 is registerAddress: 40000)
-        const int32_t registerIndex = registerAddress - REGISTER_OFFSET;
-        if (registerCount < 1 || registerIndex < 0 || (registerIndex + registerCount - 1) >= REGISTER_TOTAL_COUNT)
+        const int32_t registerIndex = GetRegisterIndexForRange(registerAddress, registerCount);
+        if (registerIndex < 0)
         {
             return {}; // invalid index
         }
@@ -126,7 +128,37 @@ public:
         return reg;
     }
 
+    bool GetRegisterRaw(uint32_t registerAddress, uint8_t registerCount, uint8_t* rawBuffer)
+    {
+        const int32_t registerIndex = GetRegisterIndexForRange(registerAddress, registerCount);
+        if (registerIndex < 0)
+        {
+            return false; // invalid index
+        }
+        std::memcpy(rawBuffer, &m_registers[registerIndex], registerCount * sizeof(m_registers[0]));
+
+        return true;
+    }
+
+    bool IsValidAddressRange(uint32_t registerAddress, uint8_t registerCount)
+    {
+        return GetRegisterIndexForRange(registerAddress, registerCount) >= 0;
+    }
+
 private:
+    int32_t GetRegisterIndexForRange(uint32_t registerAddress, uint8_t registerCount)
+    {
+        // registerAddress is already REGISTER_OFFSET-based! (e.g. sunspec-address: 40001 is
+        // registerAddress: 40000)
+        const int32_t registerIndex = registerAddress - REGISTER_OFFSET;
+        if (registerCount < 1 || registerIndex < 0 || (registerIndex + registerCount - 1) >= REGISTER_TOTAL_COUNT)
+        {
+            return -1; // invalid index
+        }
+
+        return registerIndex;
+    }
+
     void SetFloats(uint32_t registerIndex, const std::vector<float>& values)
     {
         for (size_t i = 0; i < values.size(); i++)
@@ -134,10 +166,20 @@ private:
             SetRegisterFloat(registerIndex + (i * 2), values[i]);
         }
     }
-    void SetRegisterUint16(uint32_t registerIndex, uint16_t value) { SetRegister(registerIndex, value); }
-    void SetRegisterUint32(uint32_t registerIndex, uint32_t value) { SetRegister(registerIndex, value); }
-    void SetRegisterFloat(uint32_t registerIndex, float value) { SetRegister(registerIndex, value); }
-    template <typename T> void SetRegister(uint32_t registerIndex, T value)
+    void SetRegisterUint16(uint32_t registerIndex, uint16_t value)
+    {
+        SetRegister(registerIndex, value);
+    }
+    void SetRegisterUint32(uint32_t registerIndex, uint32_t value)
+    {
+        SetRegister(registerIndex, value);
+    }
+    void SetRegisterFloat(uint32_t registerIndex, float value)
+    {
+        SetRegister(registerIndex, value);
+    }
+    template <typename T>
+    void SetRegister(uint32_t registerIndex, T value)
     {
         T temp = convert_big_endian(value);
         std::memcpy(m_registers + registerIndex, &temp, sizeof(temp));

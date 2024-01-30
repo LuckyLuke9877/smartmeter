@@ -26,7 +26,10 @@ public:
             m_rx.push_back(d);
         }
     }
-    bool available() { return m_rx.size() > 0; }
+    bool available()
+    {
+        return m_rx.size() > 0;
+    }
     bool read_byte(uint8_t* byte)
     {
         if (!available())
@@ -35,7 +38,10 @@ public:
         m_rx.pop_front();
         return true;
     }
-    void write_byte(uint8_t data) { m_tx.push_back(data); }
+    void write_byte(uint8_t data)
+    {
+        m_tx.push_back(data);
+    }
     void write_array(const std::vector<uint8_t>& data)
     {
         for (const uint8_t& d : data)
@@ -43,7 +49,7 @@ public:
             m_tx.push_back(d);
         }
     }
-    void flush() {}
+    void flush() { }
 };
 
 } // namespace uart
@@ -70,7 +76,8 @@ uint16_t crc16(const uint8_t* data, uint8_t len)
     return crc;
 }
 
-template <typename T> T convert_big_endian(T n)
+template <typename T>
+T convert_big_endian(T n)
 {
     T m;
     for (size_t i = 0; i < sizeof(T); i++)
