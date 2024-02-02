@@ -16,37 +16,37 @@ namespace uart
 class UARTDevice
 {
 public:
-    std::deque<uint8_t> m_rx;
-    std::deque<uint8_t> m_tx;
+    std::deque<uint8_t> m_uartRx;
+    std::deque<uint8_t> m_uartTx;
 
     void add_rx(const std::vector<uint8_t> data)
     {
         for (const uint8_t& d : data)
         {
-            m_rx.push_back(d);
+            m_uartRx.push_back(d);
         }
     }
     bool available()
     {
-        return m_rx.size() > 0;
+        return m_uartRx.size() > 0;
     }
     bool read_byte(uint8_t* byte)
     {
         if (!available())
             return false;
-        *byte = m_rx.front();
-        m_rx.pop_front();
+        *byte = m_uartRx.front();
+        m_uartRx.pop_front();
         return true;
     }
     void write_byte(uint8_t data)
     {
-        m_tx.push_back(data);
+        m_uartTx.push_back(data);
     }
     void write_array(const std::vector<uint8_t>& data)
     {
         for (const uint8_t& d : data)
         {
-            m_tx.push_back(d);
+            m_uartTx.push_back(d);
         }
     }
     void flush() { }

@@ -1,9 +1,5 @@
 esphome:
-  name: smartmeter
-  includes: 
-    - sunspec_meter_model.h
-    - modbus_server.h
-    - smart_meter.h
+  name: smartmeterclient
   on_boot:
     # Init digital outputs at a early stage
     priority: 400
@@ -39,7 +35,7 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   # 192.168.4.1
   ap:
-    ssid: "Smart-Meter Fallback Hotspot"
+    ssid: "Sm-Client Fallback Hotspot"
     password: !secret ap_password
 
 captive_portal:
@@ -48,14 +44,32 @@ web_server:
   port: 80
 
 uart:
- id: uart_modbus
- tx_pin: 22
- rx_pin: 21
- baud_rate: 115200
- stop_bits: 1
- rx_buffer_size: 1024
-#  debug:
+  id: uart_modbus
+  tx_pin: 22
+  rx_pin: 21
+  baud_rate: 115200
+  stop_bits: 1
+  rx_buffer_size: 1024
+  debug:
+    direction: BOTH
+    dummy_receiver: false
+    # after:
+    #   delimiter: "\n"
+    sequence:
+      - lambda: UARTDebug::log_string(direction, bytes);
  
+modbus:
+  id: modbus_client
+  uart_id: uart_modbus
+
+modbus_controller:
+  - id: modbus_client_ctrl
+    address: 240
+    modbus_id: modbus_client
+  #  setup_priority: -10
+    update_interval: "5s"
+  #  command_throttle: ${query_throttle}
+
 output:
 # to enable RS485 chip and 5V power
   - platform: gpio
@@ -69,6 +83,20 @@ output:
     id: rs485_se
 
 sensor:
+  - platform: modbus_controller
+    modbus_controller_id: modbus_client_ctrl
+    name: "Read-Test1"
+    id: read_test1
+    register_type: holding
+    address: 40020
+    register_count: 5
+    value_type: U_WORD
+    lambda: |-
+        for (auto val : data) {
+          ESP_LOGI("smc","data=0x%02x", val);
+        }
+        return x ;
+
   - platform: wifi_signal
     name: "5.0 WiFi Signal Stärke"
     update_interval: 3s
@@ -77,22 +105,3 @@ sensor:
           window_size: 5
           send_every: 3
           send_first_at: 1
-
-  - platform: custom
-    sensors:
-    - name: "SmartMeter"
-      id: smart_meter
-      internal: true
-    # "name" order must match the GetSensors() - m_queries
-  #   - name: "4.1 Aussen Temperatur"
-  #   - name: "4.2 Warmwasser Temperatur"
-  #   - name: "4.3 Mischer Soll Temperatur"
-  #   - name: "4.4 Mischer Temperatur"
-  #   - name: "4.5 Wp Vorlauf Temperatur"
-  #   - name: "4.6 Rücklauf Temperatur"
-  #   - name: "4.7 El Verbrauch WW"
-  #   - name: "4.8 El Verbrauch Heizen"
-    lambda: |-
-      auto sm = new sm::SmartMeter(id(uart_modbus));
-      App.register_component(sm);
-      return sm->GetSensors();
