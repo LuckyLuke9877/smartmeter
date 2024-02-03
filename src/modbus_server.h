@@ -42,6 +42,11 @@ public:
             errorCode = error;
         }
 
+        bool IsError()
+        {
+            return errorCode != ErrorCode::NONE;
+        }
+
         uint8_t* GetDataBuffer(uint16_t size)
         {
             const auto bufferLimit = 1024U;

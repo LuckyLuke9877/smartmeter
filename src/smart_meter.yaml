@@ -68,6 +68,17 @@ output:
     pin: 19
     id: rs485_se
 
+light:
+  - platform: neopixelbus
+    name: "NeoPixel Led"
+    id: status_led
+    internal: true
+    type: GRB
+    variant: WS2812
+    pin: 04
+    num_leds: 1
+    default_transition_length: 0s
+
 sensor:
   - platform: wifi_signal
     name: "5.0 WiFi Signal Stärke"
