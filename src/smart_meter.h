@@ -20,8 +20,8 @@ public:
     SmartMeter(uart::UARTComponent* uartModbus)
         : PollingComponent(1000)
         , m_modbusServer(SMART_METER_ADDRESS,
-                         [this](uint8_t function_code, const ModbusServer::RequestRead& request) {
-                             return on_modbus_receive_request(function_code, request);
+                         [this](uint8_t functionCode, const ModbusServer::RequestRead& request) {
+                             return OnModbusReceiveRequest(functionCode, request);
                          })
         , m_meterModel(SMART_METER_ADDRESS)
     {
@@ -38,7 +38,7 @@ public:
     void loop() override
     {
         // called in ~16ms interval
-        m_modbusServer.process_requests();
+        m_modbusServer.ProcessRequest();
         SetStatusLed(false);
     }
 
@@ -60,25 +60,24 @@ public:
         return sensors;
     }
 
-    ModbusServer::ResponseRead on_modbus_receive_request(uint8_t function_code,
-                                                         const ModbusServer::RequestRead& request)
+    ModbusServer::ResponseRead OnModbusReceiveRequest(uint8_t functionCode, const ModbusServer::RequestRead& request)
     {
         ModbusServer::ResponseRead response;
-        if (function_code != 0x03)
+        if (functionCode != 0x03)
         {
-            response.set_error(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_FUNCTION);
-            ESP_LOGW("sm", "received wrong function_code %d", function_code);
+            response.SetError(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_FUNCTION);
+            ESP_LOGW("sm", "received wrong functionCode %d", functionCode);
         }
         else
         {
-            ESP_LOGI("sm", "received request: address = %d, count = %d", request.start_address, request.address_count);
-            if (m_meterModel.IsValidAddressRange(request.start_address, request.address_count) == false)
+            ESP_LOGI("sm", "received request: address = %d, count = %d", request.startAddress, request.addressCount);
+            if (m_meterModel.IsValidAddressRange(request.startAddress, request.addressCount) == false)
             {
-                response.set_error(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_ADDRESS);
+                response.SetError(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_ADDRESS);
             }
             else
             {
-                response.SetData(m_meterModel.GetRegisterRaw(request.start_address, request.address_count));
+                response.SetData(m_meterModel.GetRegisterRaw(request.startAddress, request.addressCount));
             }
         }
         SetStatusLed(true, response.IsError());

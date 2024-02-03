@@ -24,8 +24,8 @@ class ModbusServer : public uart::UARTDevice
 public:
     struct RequestRead
     {
-        uint16_t start_address{0};
-        uint16_t address_count{0};
+        uint16_t startAddress{0};
+        uint16_t addressCount{0};
     };
     class ResponseRead
     {
@@ -39,7 +39,7 @@ public:
             DEVICE_FAILURE = 0X04
         };
 
-        void set_error(ErrorCode error)
+        void SetError(ErrorCode error)
         {
             m_errorCode = error;
         }
@@ -54,7 +54,7 @@ public:
             m_data = std::forward<std::vector<uint8_t>>(data);
         }
 
-        std::vector<uint8_t> get_payload(uint8_t address, uint8_t function_code)
+        std::vector<uint8_t> GetPayload(uint8_t address, uint8_t functionCode)
         {
             std::vector<uint8_t> payload(3 + m_data.size());
             uint8_t byte2 = m_data.size();
@@ -62,7 +62,7 @@ public:
             {
                 // error: byte2 is the error-code
                 byte2 = m_errorCode;
-                function_code |= 0x80;
+                functionCode |= 0x80;
                 m_data.clear();
             }
             else
@@ -72,7 +72,7 @@ public:
 
             // set header
             payload[0] = address;
-            payload[1] = function_code;
+            payload[1] = functionCode;
             payload[2] = byte2;
 
             return payload;
@@ -83,42 +83,42 @@ public:
         std::vector<uint8_t> m_data;
     };
 
-    using on_receive_request = std::function<ResponseRead(uint8_t function_code, const RequestRead& request)>;
+    using OnReceiveRequest = std::function<ResponseRead(uint8_t functionCode, const RequestRead& request)>;
 
-    ModbusServer(uint8_t address, on_receive_request on_receive)
-        : address_(address)
-        , on_receive_request_(on_receive)
+    ModbusServer(uint8_t address, OnReceiveRequest onReceive)
+        : m_address(address)
+        , m_onReceiveRequest(onReceive)
     { }
 
-    void process_requests()
+    void ProcessRequest()
     {
         // this is called every ~16ms, so we can not rely on timing (3.5 chars between frames see
         // https://en.wikipedia.org/wiki/Modbus) instead parse the rx_buffer for valid frames(address, function-code,
         // length, crc). Read all from uart
-        while (this->available())
+        while (available())
         {
             uint8_t byte(0);
             if (read_byte(&byte))
             {
-                rx_buffer_.push_back(byte);
+                m_rxBuffer.push_back(byte);
                 // ESP_LOGD("mbsrv", "Modbus received Byte  %d (0X%x)", byte, byte);
             }
         }
 
-        while (rx_buffer_.size() > 0)
+        while (m_rxBuffer.size() > 0)
         {
-            auto removeSize = parse_modbus_frame();
+            auto removeSize = ParseModbusFrame();
             if (removeSize == 0)
             {
                 break;
             }
             // Remove processed data
-            rx_buffer_.erase(rx_buffer_.begin(), rx_buffer_.begin() + removeSize);
+            m_rxBuffer.erase(m_rxBuffer.begin(), m_rxBuffer.begin() + removeSize);
         }
     }
 
     // Send command. payload contains data without CRC
-    void send(const std::vector<uint8_t>& payload)
+    void Send(const std::vector<uint8_t>& payload)
     {
         if (payload.empty())
         {
@@ -134,76 +134,76 @@ public:
                  crc & 0xFF, (crc >> 8) & 0xFF);
     }
 
-    std::vector<uint8_t> rx_buffer_;
+    std::vector<uint8_t> m_rxBuffer;
 
 protected:
-    uint8_t address_;
-    on_receive_request on_receive_request_;
+    uint8_t m_address;
+    OnReceiveRequest m_onReceiveRequest;
 
-    size_t get_frame_size(uint8_t function_code)
+    size_t GetFrameSize(uint8_t functionCode)
     {
         // Handle only limited number of function-codes as we do not need more. ( Extend if you need more )
         // do not handle exception code as it makes no sense for a server to receive one.
-        return function_code >= 0x01 && function_code <= 0x04 ? 8 : 0;
+        return functionCode >= 0x01 && functionCode <= 0x04 ? 8 : 0;
     }
 
-    uint32_t parse_modbus_frame()
+    uint32_t ParseModbusFrame()
     {
         const uint32_t needMoreData = 0;
         const uint32_t tryToFindValidFrame = 1;
 
-        size_t buf_size = rx_buffer_.size();
-        // at least address | function_code
-        if (buf_size < 2)
+        size_t bufSize = m_rxBuffer.size();
+        // at least address | functionCode
+        if (bufSize < 2)
         {
             return needMoreData;
         }
 
-        const auto begin = rx_buffer_.begin();
+        const auto begin = m_rxBuffer.begin();
         uint8_t address = *(begin + 0);
-        const auto function_code = *(begin + 1);
-        const auto frame_size = get_frame_size(function_code);
-        if (frame_size == 0)
+        const auto functionCode = *(begin + 1);
+        const auto frameSize = GetFrameSize(functionCode);
+        if (frameSize == 0)
         {
-            ESP_LOGD("mbsrv", "Modbus function-code %02x not supported or invalid frame", function_code);
+            ESP_LOGD("mbsrv", "Modbus function-code %02x not supported or invalid frame", functionCode);
             return tryToFindValidFrame;
         }
 
-        if (buf_size < frame_size)
+        if (bufSize < frameSize)
         {
             return needMoreData;
         }
 
         // Validate crc
-        uint16_t computed_crc = crc16(&*begin, frame_size - 2);
-        uint16_t remote_crc = static_cast<uint16_t>(*(begin + frame_size - 2))
-            | (static_cast<uint16_t>(*(begin + frame_size - 1)) << 8);
-        if (computed_crc != remote_crc)
+        uint16_t computedCrc = crc16(&*begin, frameSize - 2);
+        uint16_t remoteCrc
+            = static_cast<uint16_t>(*(begin + frameSize - 2)) | (static_cast<uint16_t>(*(begin + frameSize - 1)) << 8);
+        if (computedCrc != remoteCrc)
         {
             ESP_LOGD("mbsrv", "Invalid CRC");
             // computed_crc.hi = 0x" << (computed_crc >> 8) << std::dec << std::endl;
             return tryToFindValidFrame;
         }
 
-        if (address_ == address)
+        if (m_address == address)
         {
             RequestRead request;
             // Note: Received as big endian
-            request.start_address = static_cast<uint16_t>(*(begin + 2)) << 8;
-            request.start_address += static_cast<uint16_t>(*(begin + 3));
-            request.address_count = static_cast<uint16_t>(*(begin + 4)) << 8;
-            request.address_count += static_cast<uint16_t>(*(begin + 5));
-            ResponseRead response = on_receive_request_(function_code, request);
+            request.startAddress = static_cast<uint16_t>(*(begin + 2)) << 8;
+            request.startAddress += static_cast<uint16_t>(*(begin + 3));
+            request.addressCount = static_cast<uint16_t>(*(begin + 4)) << 8;
+            request.addressCount += static_cast<uint16_t>(*(begin + 5));
+            ResponseRead response = m_onReceiveRequest(functionCode, request);
 
-            send(response.get_payload(address_, function_code));
+            Send(response.GetPayload(m_address, functionCode));
         }
         else
         {
-            ESP_LOGD("mbsrv", "Not our[%d] address = %d", address_, address);
+            ESP_LOGD("mbsrv", "Not our[%d] address = %d", m_address, address);
         }
 
         // Frame can be removed
-        return frame_size;
+        return frameSize;
     }
 };
 

@@ -6,13 +6,13 @@ using namespace sunspec;
 namespace
 {
 constexpr uint8_t MODBUS_ADDRESS = 0x01;
-constexpr auto    VALUE1 = 1.1f;
-constexpr auto    VALUE2 = 22.22f;
-constexpr auto    VALUE3 = 333.333f;
-constexpr auto    VALUE4 = 0.4444f;
+constexpr auto VALUE1 = 1.1f;
+constexpr auto VALUE2 = 22.22f;
+constexpr auto VALUE3 = 333.333f;
+constexpr auto VALUE4 = 0.4444f;
 
 // Use other conversion method for test
-float to_float_little_endian(uint16_t* reg)
+float ToFloatLittleEndian(uint16_t* reg)
 {
     // Note: cannot direct cast to float => wrong result!!
     uint32_t tempUint32 = __builtin_bswap32(*(uint32_t*)reg);
@@ -27,10 +27,10 @@ protected:
     void CheckFloatValues(uint32_t registerAddress)
     {
         auto reg = m_meter.GetRegister(registerAddress, 8);
-        ASSERT_EQ(to_float_little_endian(&reg[0]), VALUE1);
-        ASSERT_EQ(to_float_little_endian(&reg[2]), VALUE2);
-        ASSERT_EQ(to_float_little_endian(&reg[4]), VALUE3);
-        ASSERT_EQ(to_float_little_endian(&reg[6]), VALUE4);
+        ASSERT_EQ(ToFloatLittleEndian(&reg[0]), VALUE1);
+        ASSERT_EQ(ToFloatLittleEndian(&reg[2]), VALUE2);
+        ASSERT_EQ(ToFloatLittleEndian(&reg[4]), VALUE3);
+        ASSERT_EQ(ToFloatLittleEndian(&reg[6]), VALUE4);
     }
 
     MeterModel m_meter{MODBUS_ADDRESS};
@@ -108,7 +108,7 @@ TEST_F(SunspecMeterModelTest, SetFrequency_ResultOk)
     m_meter.SetFrequency(VALUE1);
 
     auto reg = m_meter.GetRegister(40095, 2);
-    ASSERT_EQ(to_float_little_endian(&reg[0]), VALUE1);
+    ASSERT_EQ(ToFloatLittleEndian(&reg[0]), VALUE1);
 }
 
 TEST_F(SunspecMeterModelTest, SetPower_ResultOk)

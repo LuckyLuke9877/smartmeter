@@ -20,7 +20,7 @@ constexpr auto REGISTER_END_COUNT = 2;
 constexpr auto REGISTER_TOTAL_COUNT = REGISTER_COMMON_COUNT + REGISTER_METER_COUNT + REGISTER_END_COUNT;
 
 template <typename T>
-T convert_big_endian(T n)
+T Convert2BigEndian(T n)
 {
     T m;
     for (size_t i = 0; i < sizeof(T); i++)
@@ -182,7 +182,7 @@ private:
     template <typename T>
     void SetRegister(uint32_t registerIndex, T value)
     {
-        T temp = convert_big_endian(value);
+        T temp = Convert2BigEndian(value);
         std::memcpy(m_registers + registerIndex, &temp, sizeof(temp));
     }
 

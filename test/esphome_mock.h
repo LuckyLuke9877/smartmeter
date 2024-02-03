@@ -19,7 +19,7 @@ public:
     std::deque<uint8_t> m_uartRx;
     std::deque<uint8_t> m_uartTx;
 
-    void add_rx(const std::vector<uint8_t> data)
+    void AddRx(const std::vector<uint8_t> data)
     {
         for (const uint8_t& d : data)
         {
@@ -77,7 +77,7 @@ uint16_t crc16(const uint8_t* data, uint8_t len)
 }
 
 template <typename T>
-T convert_big_endian(T n)
+T Convert2BigEndian(T n)
 {
     T m;
     for (size_t i = 0; i < sizeof(T); i++)

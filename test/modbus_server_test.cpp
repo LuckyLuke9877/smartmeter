@@ -17,14 +17,13 @@ protected:
 
     void SetUp() override
     {
-        m_server.reset(new ModbusServer(0x01U, [this](uint8_t function_code, const ModbusServer::RequestRead& request) {
-            return on_modbus_receive_request(function_code, request);
+        m_server.reset(new ModbusServer(0x01U, [this](uint8_t functionCode, const ModbusServer::RequestRead& request) {
+            return OnModbusReceiveRequest(functionCode, request);
         }));
     }
     void TearDown() override { }
 
-    ModbusServer::ResponseRead on_modbus_receive_request(uint8_t function_code,
-                                                         const ModbusServer::RequestRead& request)
+    ModbusServer::ResponseRead OnModbusReceiveRequest(uint8_t functionCode, const ModbusServer::RequestRead& request)
     {
         // std::cout << "Request received\n";
         m_requests.push_back(request);
@@ -34,7 +33,7 @@ protected:
         if (m_responseValue != 0.0f)
         {
             // MSB first as it will be in Sunspec
-            auto bigEndianValue = convert_big_endian(m_responseValue);
+            auto bigEndianValue = Convert2BigEndian(m_responseValue);
             uint8_t* val = reinterpret_cast<uint8_t*>(&bigEndianValue);
             std::vector<uint8_t> buffer(sizeof(bigEndianValue));
             for (int i = 0; i < sizeof(bigEndianValue); i++)
@@ -46,7 +45,7 @@ protected:
         else
         {
             // Error response
-            response.set_error(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_FUNCTION);
+            response.SetError(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_FUNCTION);
         }
 
         return response;
@@ -57,13 +56,13 @@ TEST_F(ModbusServerTest, OnReceive_IncompleteRequest_RxBufferOk)
 {
     const std::vector<uint8_t> testData = {0x01, 0x03, 0x00, 0x02, 0x00, 0x01, 0x25};
 
-    m_server->add_rx(testData);
+    m_server->AddRx(testData);
     ASSERT_EQ(m_server->m_uartRx.size(), 7);
-    m_server->process_requests();
+    m_server->ProcessRequest();
 
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 7);
-    ASSERT_EQ(m_server->rx_buffer_, testData);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 7);
+    ASSERT_EQ(m_server->m_rxBuffer, testData);
     ASSERT_EQ(m_server->m_uartTx.size(), 0);
     ASSERT_EQ(m_requests.size(), 0);
 }
@@ -73,14 +72,14 @@ TEST_F(ModbusServerTest, OnReceive_IncompleteFollowedByValidRequest_ResponseOk)
     std::vector<uint8_t> testData = {0x01, 0x03, 0x00, 0x02, 0x00, 0x01, 0x25};
     m_responseValue = 42.3f;
 
-    m_server->add_rx(testData);
+    m_server->AddRx(testData);
     testData.push_back(0xca);
-    m_server->add_rx(testData);
+    m_server->AddRx(testData);
     ASSERT_EQ(m_server->m_uartRx.size(), 15);
-    m_server->process_requests();
+    m_server->ProcessRequest();
 
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 0);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 0);
     ASSERT_EQ(m_server->m_uartTx.size(), 9);
     ASSERT_EQ(m_requests.size(), 1);
 }
@@ -91,15 +90,15 @@ TEST_F(ModbusServerTest, OnReceive_InvalidCrcFollowedByValidRequest_ResponseOk)
     const std::vector<uint8_t> testData = {0x01, 0x03, 0x00, 0x02, 0x00, 0x01, 0x25, 0xca};
     m_responseValue = 42.3f;
 
-    m_server->add_rx(invalidTestData);
-    m_server->add_rx(testData);
-    m_server->add_rx(invalidTestData);
-    m_server->add_rx(testData);
+    m_server->AddRx(invalidTestData);
+    m_server->AddRx(testData);
+    m_server->AddRx(invalidTestData);
+    m_server->AddRx(testData);
     ASSERT_EQ(m_server->m_uartRx.size(), 32);
-    m_server->process_requests();
+    m_server->ProcessRequest();
 
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 0);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 0);
     ASSERT_EQ(m_server->m_uartTx.size(), 18);
     ASSERT_EQ(m_requests.size(), 2);
     ASSERT_EQ(::memcmp(&m_requests[0], &m_requests[1], sizeof(m_requests[0])), 0);
@@ -109,12 +108,12 @@ TEST_F(ModbusServerTest, OnReceive_ValidRequest_InvalidFunctionCode_Response_IsE
 {
     std::vector<uint8_t> testData = {0x01, 0x04, 0x00, 0x02, 0x00, 0x01, 0x90, 0x0a};
 
-    m_server->add_rx(testData);
+    m_server->AddRx(testData);
     ASSERT_EQ(m_server->m_uartRx.size(), 8);
-    m_server->process_requests();
+    m_server->ProcessRequest();
 
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 0);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 0);
     ASSERT_EQ(m_server->m_uartTx.size(), 5);
     ASSERT_EQ(m_requests.size(), 1);
     ASSERT_EQ(m_server->m_uartTx[0], testData[0]);
@@ -128,32 +127,32 @@ TEST_F(ModbusServerTest, OnReceive_InvalidFunctionCodeFollowedByValidRequest_Res
     const std::vector<uint8_t> testData = {0x01, 0x03, 0x00, 0x00, 0x00, 0x02, 0xc4, 0x0b};
     m_responseValue = 42.3f;
 
-    m_server->add_rx(invalidFunctionCodeTestData);
-    m_server->add_rx(testData);
+    m_server->AddRx(invalidFunctionCodeTestData);
+    m_server->AddRx(testData);
     ASSERT_EQ(m_server->m_uartRx.size(), 16);
-    m_server->process_requests();
+    m_server->ProcessRequest();
 
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 0);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 0);
     ASSERT_EQ(m_server->m_uartTx.size(), 9);
     ASSERT_EQ(m_requests.size(), 1);
 
     // verify request
     const auto& request = m_requests[0];
-    ASSERT_EQ(request.start_address, 0);
-    ASSERT_EQ(request.address_count, 2);
+    ASSERT_EQ(request.startAddress, 0);
+    ASSERT_EQ(request.addressCount, 2);
 }
 
-TEST_F(ModbusServerTest, OnReceive_ValidRequestButWrongAddress_Response_None)
+TEST_F(ModbusServerTest, OnReceive_ValidRequestButWrongAddress_ResponseNone)
 {
     const std::vector<uint8_t> testData = {0x02, 0x03, 0x00, 0x02, 0x00, 0x01, 0x25, 0xf9};
 
-    m_server->add_rx(testData);
+    m_server->AddRx(testData);
     ASSERT_EQ(m_server->m_uartRx.size(), 8);
-    m_server->process_requests();
+    m_server->ProcessRequest();
 
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 0);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 0);
     ASSERT_EQ(m_server->m_uartTx.size(), 0);
     ASSERT_EQ(m_requests.size(), 0);
 }
@@ -167,36 +166,36 @@ TEST_F(ModbusServerTest, OnReceive_ValidRequest_ResponseOk)
     uint8_t pos = 0;
     // Byte 1
     m_server->m_uartRx.push_back(testData[pos++]);
-    m_server->process_requests();
+    m_server->ProcessRequest();
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 1);
-    ASSERT_EQ(m_server->rx_buffer_[0], 1);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 1);
+    ASSERT_EQ(m_server->m_rxBuffer[0], 1);
 
     // Byte 2
     m_server->m_uartRx.push_back(testData[pos++]);
-    m_server->process_requests();
+    m_server->ProcessRequest();
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 2);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 2);
 
     // Byte 3 - 6
     m_server->m_uartRx.push_back(testData[pos++]);
     m_server->m_uartRx.push_back(testData[pos++]);
     m_server->m_uartRx.push_back(testData[pos++]);
     m_server->m_uartRx.push_back(testData[pos++]);
-    m_server->process_requests();
+    m_server->ProcessRequest();
     ASSERT_EQ(m_server->m_uartRx.size(), 0);
-    ASSERT_EQ(m_server->rx_buffer_.size(), 6);
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 6);
 
     // Byte 7
     m_server->m_uartRx.push_back(testData[pos++]);
-    m_server->process_requests();
-    ASSERT_EQ(m_server->rx_buffer_.size(), 7);
+    m_server->ProcessRequest();
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 7);
     ASSERT_EQ(m_server->m_uartTx.size(), 0);
 
     // Byte 8: frame is complete => response received
     m_server->m_uartRx.push_back(testData[pos++]);
-    m_server->process_requests();
-    ASSERT_EQ(m_server->rx_buffer_.size(), 0);
+    m_server->ProcessRequest();
+    ASSERT_EQ(m_server->m_rxBuffer.size(), 0);
     ASSERT_EQ(m_server->m_uartTx.size(), 9);
 
     ASSERT_EQ(m_server->m_uartTx[0], testData[0]);
@@ -214,8 +213,8 @@ TEST_F(ModbusServerTest, OnReceive_ValidRequest_ResponseOk)
 
     // verify request
     const auto& request = m_requests[0];
-    ASSERT_EQ(request.start_address, 2);
-    ASSERT_EQ(request.address_count, 1);
+    ASSERT_EQ(request.startAddress, 2);
+    ASSERT_EQ(request.addressCount, 1);
 }
 
 TEST_F(ModbusServerTest, Send_Response4Bytes_CrcOk)
@@ -230,7 +229,7 @@ TEST_F(ModbusServerTest, Send_Response4Bytes_CrcOk)
     std::vector<uint8_t> movingData(data);
     response.SetData(std::move(movingData));
 
-    m_server->send(response.get_payload(address, functionCode));
+    m_server->Send(response.GetPayload(address, functionCode));
 
     ASSERT_EQ(m_server->m_uartTx.size(), 9);
     ASSERT_EQ(m_server->m_uartTx[0], address);
@@ -254,7 +253,7 @@ TEST_F(ModbusServerTest, Send_Response2Bytes_CrcOk)
     std::vector<uint8_t> movingData(data);
     response.SetData(std::move(movingData));
 
-    m_server->send(response.get_payload(address, functionCode));
+    m_server->Send(response.GetPayload(address, functionCode));
 
     ASSERT_EQ(m_server->m_uartTx.size(), 7);
     ASSERT_EQ(m_server->m_uartTx[0], address);
@@ -265,7 +264,7 @@ TEST_F(ModbusServerTest, Send_Response2Bytes_CrcOk)
     ASSERT_EQ(m_server->m_uartTx[6], expectedCrcHi);
 }
 
-TEST_F(ModbusServerTest, ResponseRead_get_payload_SetSomeData_ResultOk)
+TEST_F(ModbusServerTest, ResponseRead_GetPayload_SetSomeData_ResultOk)
 {
     const std::vector<uint8_t> testData = {0x01, 0x02, 0x03, 0x04};
     ModbusServer::ResponseRead response;
@@ -274,7 +273,7 @@ TEST_F(ModbusServerTest, ResponseRead_get_payload_SetSomeData_ResultOk)
 
     const uint8_t address = 0x42;
     const uint8_t functionCode = 0x03;
-    auto result = response.get_payload(address, functionCode);
+    auto result = response.GetPayload(address, functionCode);
 
     ASSERT_EQ(result[0], address);
     ASSERT_EQ(result[1], functionCode);
@@ -285,18 +284,18 @@ TEST_F(ModbusServerTest, ResponseRead_get_payload_SetSomeData_ResultOk)
     ASSERT_EQ(result[6], testData[3]);
 }
 
-TEST_F(ModbusServerTest, ResponseRead_get_payload_set_error_ResultIsError)
+TEST_F(ModbusServerTest, ResponseRead_GetPayload_SetError_ResultIsError)
 {
     const std::vector<uint8_t> testData = {0x01, 0x02, 0x03, 0x04};
     ModbusServer::ResponseRead response;
     // first set some data, but error must overrule
     std::vector<uint8_t> movingData(testData);
     response.SetData(std::move(movingData));
-    response.set_error(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_VALUE);
+    response.SetError(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_VALUE);
 
     const uint8_t address = 0x42;
     const uint8_t functionCode = 0x03;
-    auto result = response.get_payload(address, functionCode);
+    auto result = response.GetPayload(address, functionCode);
 
     ASSERT_EQ(result[0], address);
     ASSERT_EQ(result[1], functionCode | 0x80);
