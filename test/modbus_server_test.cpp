@@ -23,8 +23,8 @@ protected:
     }
     void TearDown() override { }
 
-    ModbusServer::ResponseRead
-    on_modbus_receive_request(uint8_t function_code, const ModbusServer::RequestRead& request)
+    ModbusServer::ResponseRead on_modbus_receive_request(uint8_t function_code,
+                                                         const ModbusServer::RequestRead& request)
     {
         // std::cout << "Request received\n";
         m_requests.push_back(request);
@@ -34,13 +34,14 @@ protected:
         if (m_responseValue != 0.0f)
         {
             // MSB first as it will be in Sunspec
-            auto buffer = response.GetDataBuffer(sizeof(m_responseValue));
             auto bigEndianValue = convert_big_endian(m_responseValue);
             uint8_t* val = reinterpret_cast<uint8_t*>(&bigEndianValue);
+            std::vector<uint8_t> buffer(sizeof(bigEndianValue));
             for (int i = 0; i < sizeof(bigEndianValue); i++)
             {
                 buffer[i] = val[i];
             }
+            response.SetData(std::move(buffer));
         }
         else
         {
@@ -226,8 +227,8 @@ TEST_F(ModbusServerTest, Send_Response4Bytes_CrcOk)
     const uint8_t expectedCrcHi = 0xfe;
 
     ModbusServer::ResponseRead response;
-    auto dataBuffer = response.GetDataBuffer(data.size());
-    std::memcpy(dataBuffer, &data[0], data.size());
+    std::vector<uint8_t> movingData(data);
+    response.SetData(std::move(movingData));
 
     m_server->send(response.get_payload(address, functionCode));
 
@@ -250,8 +251,8 @@ TEST_F(ModbusServerTest, Send_Response2Bytes_CrcOk)
     const uint8_t expectedCrcHi = 0x86;
 
     ModbusServer::ResponseRead response;
-    auto dataBuffer = response.GetDataBuffer(data.size());
-    std::memcpy(dataBuffer, &data[0], data.size());
+    std::vector<uint8_t> movingData(data);
+    response.SetData(std::move(movingData));
 
     m_server->send(response.get_payload(address, functionCode));
 
@@ -268,7 +269,8 @@ TEST_F(ModbusServerTest, ResponseRead_get_payload_SetSomeData_ResultOk)
 {
     const std::vector<uint8_t> testData = {0x01, 0x02, 0x03, 0x04};
     ModbusServer::ResponseRead response;
-    std::memcpy(response.GetDataBuffer(testData.size()), &testData[0], testData.size());
+    std::vector<uint8_t> movingData(testData);
+    response.SetData(std::move(movingData));
 
     const uint8_t address = 0x42;
     const uint8_t functionCode = 0x03;
@@ -288,7 +290,8 @@ TEST_F(ModbusServerTest, ResponseRead_get_payload_set_error_ResultIsError)
     const std::vector<uint8_t> testData = {0x01, 0x02, 0x03, 0x04};
     ModbusServer::ResponseRead response;
     // first set some data, but error must overrule
-    std::memcpy(response.GetDataBuffer(testData.size()), &testData[0], testData.size());
+    std::vector<uint8_t> movingData(testData);
+    response.SetData(std::move(movingData));
     response.set_error(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_VALUE);
 
     const uint8_t address = 0x42;
@@ -298,16 +301,4 @@ TEST_F(ModbusServerTest, ResponseRead_get_payload_set_error_ResultIsError)
     ASSERT_EQ(result[0], address);
     ASSERT_EQ(result[1], functionCode | 0x80);
     ASSERT_EQ(result[2], ModbusServer::ResponseRead::ErrorCode::ILLEGAL_VALUE);
-}
-
-TEST_F(ModbusServerTest, ResponseRead_GetDataBuffer_SizeTooBig_NoBufferReturned)
-{
-    ModbusServer::ResponseRead response;
-    ASSERT_EQ(response.GetDataBuffer(1025), nullptr);
-}
-
-TEST_F(ModbusServerTest, ResponseRead_GetDataBuffer_SizeOk_BufferReturned)
-{
-    ModbusServer::ResponseRead response;
-    ASSERT_NE(response.GetDataBuffer(1024), nullptr);
 }

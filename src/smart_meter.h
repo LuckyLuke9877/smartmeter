@@ -76,12 +76,10 @@ public:
             {
                 response.set_error(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_ADDRESS);
             }
-            auto dataBuffer = response.GetDataBuffer(request.address_count * sizeof(uint16_t));
-            if (dataBuffer == nullptr)
+            else
             {
-                response.set_error(ModbusServer::ResponseRead::ErrorCode::DEVICE_FAILURE);
+                response.SetData(m_meterModel.GetRegisterRaw(request.start_address, request.address_count));
             }
-            m_meterModel.GetRegisterRaw(request.start_address, request.address_count, dataBuffer);
         }
         SetStatusLed(true, response.IsError());
 

@@ -5,6 +5,7 @@
     #include "esphome/core/helpers.h"
 #endif
 
+#include <cstring>
 #include <functional>
 #include <vector>
 
@@ -26,8 +27,9 @@ public:
         uint16_t start_address{0};
         uint16_t address_count{0};
     };
-    struct ResponseRead
+    class ResponseRead
     {
+    public:
         enum ErrorCode
         {
             NONE = 0x00,
@@ -39,55 +41,46 @@ public:
 
         void set_error(ErrorCode error)
         {
-            errorCode = error;
+            m_errorCode = error;
         }
 
         bool IsError()
         {
-            return errorCode != ErrorCode::NONE;
+            return m_errorCode != ErrorCode::NONE;
         }
 
-        uint8_t* GetDataBuffer(uint16_t size)
+        void SetData(std::vector<uint8_t>&& data)
         {
-            const auto bufferLimit = 1024U;
-            if (size > bufferLimit)
-            {
-                return nullptr;
-            }
-
-            buffer.resize(size + headerSize);
-
-            return &buffer[headerSize];
+            m_data = std::forward<std::vector<uint8_t>>(data);
         }
 
-        const std::vector<uint8_t>& get_payload(uint8_t address, uint8_t function_code)
+        std::vector<uint8_t> get_payload(uint8_t address, uint8_t function_code)
         {
-            if (errorCode != ErrorCode::NONE)
+            std::vector<uint8_t> payload(3 + m_data.size());
+            uint8_t byte2 = m_data.size();
+            if (m_errorCode != ErrorCode::NONE)
             {
-                // error code
+                // error: byte2 is the error-code
+                byte2 = m_errorCode;
                 function_code |= 0x80;
-                buffer.resize(headerSize);
-                buffer[2] = errorCode;
+                m_data.clear();
             }
             else
             {
-                if (buffer.size() < headerSize)
-                {
-                    buffer.resize(headerSize);
-                }
-                // set first param "byte_count"
-                buffer[2] = buffer.size() - headerSize;
+                std::memcpy(&payload[3], &m_data[0], m_data.size());
             }
-            buffer[0] = address;
-            buffer[1] = function_code;
 
-            return buffer;
+            // set header
+            payload[0] = address;
+            payload[1] = function_code;
+            payload[2] = byte2;
+
+            return payload;
         }
 
     private:
-        const uint16_t headerSize{3}; // address + function_code + byte_count or error
-        ErrorCode errorCode{ErrorCode::NONE};
-        std::vector<uint8_t> buffer; // to prevent memory copy, it contains header & data
+        ErrorCode m_errorCode{ErrorCode::NONE};
+        std::vector<uint8_t> m_data;
     };
 
     using on_receive_request = std::function<ResponseRead(uint8_t function_code, const RequestRead& request)>;

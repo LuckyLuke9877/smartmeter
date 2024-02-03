@@ -128,16 +128,17 @@ public:
         return reg;
     }
 
-    bool GetRegisterRaw(uint32_t registerAddress, uint8_t registerCount, uint8_t* rawBuffer)
+    std::vector<uint8_t> GetRegisterRaw(uint32_t registerAddress, uint8_t registerCount)
     {
         const int32_t registerIndex = GetRegisterIndexForRange(registerAddress, registerCount);
         if (registerIndex < 0)
         {
-            return false; // invalid index
+            return {}; // invalid index
         }
-        std::memcpy(rawBuffer, &m_registers[registerIndex], registerCount * sizeof(m_registers[0]));
+        std::vector<uint8_t> raw(registerCount * sizeof(m_registers[0]));
+        std::memcpy(&raw[0], &m_registers[registerIndex], raw.size());
 
-        return true;
+        return raw;
     }
 
     bool IsValidAddressRange(uint32_t registerAddress, uint8_t registerCount)
