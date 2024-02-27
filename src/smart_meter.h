@@ -3,6 +3,7 @@
 #include "esphome.h"
 #include "modbus_server.h"
 #include "sunspec_meter_model.h"
+#include "./esphome-dlms-meter/espdm.h"
 
 namespace esphome
 {
@@ -13,51 +14,75 @@ using namespace sunspec;
 
 constexpr uint8_t SMART_METER_ADDRESS = 240;
 constexpr uint32_t BLINK_OFF_COUNT = 5; // 5 * 16ms
+constexpr float UNKNOWN_VALUE = 0.0f;
 
-class SmartMeter : public PollingComponent, public sensor::Sensor
+class SmartMeter : public Component, public sensor::Sensor
 {
 public:
-    SmartMeter(uart::UARTComponent* uartModbus)
-        : PollingComponent(1000)
-        , m_modbusServer(SMART_METER_ADDRESS,
+    SmartMeter(uart::UARTComponent* uartModbus, uart::UARTComponent* uartMbus)
+        : m_modbusServer(SMART_METER_ADDRESS,
                          [this](uint8_t functionCode, const ModbusServer::RequestRead& request) {
                              return OnModbusReceiveRequest(functionCode, request);
                          })
+        , m_dlmsMeter(uartMbus)
         , m_meterModel(SMART_METER_ADDRESS)
     {
+        m_dlmsMeter.RegisterForMeterData([this](const espdm::DlmsMeter::MeterData& data) { OnReceiveMeterData(data); });
         m_modbusServer.set_uart_parent(uartModbus);
-        // None GUI sensor, just needed to get access from yaml.
+        // None GUI sensor, just to get access from yaml if needed.
         set_internal(true);
     }
 
     void setup() override
     {
         ESP_LOGI("sm", "setup() called");
+        m_dlmsMeter.setup();
     }
 
     void loop() override
     {
         // called in ~16ms interval
+        m_dlmsMeter.loop();
         m_modbusServer.ProcessRequest();
         SetStatusLed(false);
     }
-
-    void update() override
-    {
-        // led test hack
-        // SetStatusLed(true, ((millis() / 1000) % 2) == 0);
-    }
-
-    // yaml called functions
-    void InitOnBoot() { }
 
     std::vector<sensor::Sensor*> GetSensors()
     {
         std::vector<sensor::Sensor*> sensors;
         sensors.push_back(this);
-        // sensors.push_back(&m_sensor);
 
         return sensors;
+    }
+
+    void OnReceiveMeterData(const espdm::DlmsMeter::MeterData& data)
+    {
+        // Set Sunspec meter data
+        m_meterModel.SetVoltageToNeutral(data.GetAverageVoltage(), data.voltageL1, data.voltageL2, data.voltageL3);
+
+        m_meterModel.SetAcCurrent(data.currentL1 + data.currentL2 + data.currentL3, data.currentL1, data.currentL2,
+                                  data.currentL3);
+
+        m_meterModel.SetVoltagePhaseToPhase(
+            data.GetPhaseToPhaseVoltage(data.GetAverageVoltage()), data.GetPhaseToPhaseVoltage(data.voltageL1),
+            data.GetPhaseToPhaseVoltage(data.voltageL2), data.GetPhaseToPhaseVoltage(data.voltageL3));
+
+        m_meterModel.SetFrequency(50.0f);
+
+        const float powerPerPhase = data.activePowerPlus / 3.0f;
+        m_meterModel.SetPower(data.activePowerPlus, powerPerPhase, powerPerPhase, powerPerPhase);
+
+        m_meterModel.SetPowerFactor(data.GetPowerFactor(), UNKNOWN_VALUE, UNKNOWN_VALUE, UNKNOWN_VALUE);
+
+        const float activeEnergyPerPhase = data.activeEnergyPlus / 3.0f;
+        m_meterModel.SetTotalWattHoursImported(data.activeEnergyPlus, activeEnergyPerPhase, activeEnergyPerPhase,
+                                               activeEnergyPerPhase);
+
+        const float reactiveEnergyPerPhase = data.reactiveEnergyPlus / 3.0f;
+        m_meterModel.SetTotalVaHoursImported(data.reactiveEnergyPlus, reactiveEnergyPerPhase, reactiveEnergyPerPhase,
+                                             reactiveEnergyPerPhase);
+
+        ESP_LOGI("sm", "MeterModel data updated");
     }
 
     ModbusServer::ResponseRead OnModbusReceiveRequest(uint8_t functionCode, const ModbusServer::RequestRead& request)
@@ -66,11 +91,12 @@ public:
         if (functionCode != 0x03)
         {
             response.SetError(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_FUNCTION);
-            ESP_LOGW("sm", "received wrong functionCode %d", functionCode);
+            ESP_LOGW("sm", "Modbus received wrong functionCode %d", functionCode);
         }
         else
         {
-            ESP_LOGI("sm", "received request: address = %d, count = %d", request.startAddress, request.addressCount);
+            ESP_LOGI("sm", "Modbus request received: address = %d, count = %d", request.startAddress,
+                     request.addressCount);
             if (m_meterModel.IsValidAddressRange(request.startAddress, request.addressCount) == false)
             {
                 response.SetError(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_ADDRESS);
@@ -88,6 +114,7 @@ public:
 private:
     // sensor::Sensor m_sensor;
     ModbusServer m_modbusServer;
+    espdm::DlmsMeter m_dlmsMeter;
     MeterModel m_meterModel;
     uint32_t m_statusLedBlinkCount{0};
 
