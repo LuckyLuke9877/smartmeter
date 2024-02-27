@@ -1,0 +1,26 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "GTest",
+            "binaryDir": "build",
+            "generator": "Ninja Multi-Config",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "cc",
+                "CMAKE_CXX_COMPILER": "c++"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "GTest",
+            "configuration": "Debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "GTest",
+            "configuration": "Release"
+        }
+    ]
+}
