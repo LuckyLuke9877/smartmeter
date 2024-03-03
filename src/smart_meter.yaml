@@ -28,7 +28,7 @@ preferences:
 
 # Enable logging
 logger:
-  level: DEBUG
+  level: INFO
 
 ota:
   password: !secret ota_password
@@ -61,6 +61,13 @@ uart:
     baud_rate: 2400
     stop_bits: 1
     rx_buffer_size: 1024 # Needed to receive the large packets send by the smart meter
+    # mbus board:
+    # GND => Esp.GND
+    # 3.3V => Esp.VDD
+    # RX => Esp.tx_pin(5)
+    # TX => Esp.rx_pin(18)
+    # MBUS1 => Kaifa.RJ11.3
+    # MBUS2 => Kaifa.RJ11.4
 
 output:
 # to enable RS485 chip and 5V power

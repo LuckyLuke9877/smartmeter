@@ -38,7 +38,7 @@ public:
         float GetPowerFactor() const
         {
             const auto apparentPower = GetApparentPower();
-            return apparentPower != 0 ? apparentPower / activePowerPlus : 1.0f;
+            return apparentPower != 0 ? activePowerPlus / apparentPower : 1.0f;
         }
         static float GetPhaseToPhaseVoltage(float voltage)
         {

@@ -25,7 +25,7 @@ void DlmsMeter::loop()
 
     while (available()) // Read while data is available
     {
-        uint8_t c;
+        uint8_t c(0);
         this->read_byte(&c);
         this->receiveBuffer.push_back(c);
 
@@ -36,6 +36,7 @@ void DlmsMeter::loop()
 
     if (!this->receiveBuffer.empty() && currentTime - this->lastRead > this->readTimeout)
     {
+        ESP_LOGI(TAG, "receiveBuffer.size() = %d bytes", receiveBuffer.size());
         log_packet(this->receiveBuffer);
 
         // Verify and parse M-Bus frames
@@ -70,8 +71,14 @@ void DlmsMeter::loop()
             // Check if received data is enough for the given frame length
             if (this->receiveBuffer.size() - frameOffset < frameLength + 3)
             {
-                ESP_LOGE(TAG, "MBUS: Frame too big for received data");
+                ESP_LOGE(TAG, "MBUS: receiveBuffer.size[%d] smaller than frameLength[%d] for received data",
+                         receiveBuffer.size(), frameLength);
                 return abort();
+            }
+            else
+            {
+                ESP_LOGI(TAG, "MBUS: receiveBuffer.size[%d] is ok, frameLength[%d] for received data",
+                         receiveBuffer.size(), frameLength);
             }
 
             if (this->receiveBuffer[frameOffset + frameLength + MBUS_HEADER_INTRO_LENGTH + MBUS_FOOTER_LENGTH - 1]
@@ -565,7 +572,7 @@ void DlmsMeter::enable_mqtt(mqtt::MQTTClientComponent* mqtt_client, const char* 
 
 void DlmsMeter::log_packet(std::vector<uint8_t> data)
 {
-    ESP_LOGV(TAG, format_hex_pretty(data).c_str());
+    ESP_LOGI(TAG, format_hex_pretty(data).c_str());
 }
 
 void DlmsMeter::RegisterForMeterData(DlmsMeter::OnReceiveMeterData onReceive)
