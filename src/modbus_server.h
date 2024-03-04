@@ -130,7 +130,7 @@ public:
         write_byte(crc & 0xFF);
         write_byte((crc >> 8) & 0xFF);
         flush();
-        ESP_LOGI("mbsrv", "Modbus sending raw frame: %s, CRC: 0x%02x, 0x%02x", format_hex_pretty(payload).c_str(),
+        ESP_LOGD("mbsrv", "Modbus sending raw frame: %s, CRC: 0x%02x, 0x%02x", format_hex_pretty(payload).c_str(),
                  crc & 0xFF, (crc >> 8) & 0xFF);
     }
 
@@ -165,7 +165,7 @@ protected:
         const auto frameSize = GetFrameSize(functionCode);
         if (frameSize == 0)
         {
-            ESP_LOGI("mbsrv", "Modbus function-code %02x not supported or invalid frame", functionCode);
+            ESP_LOGW("mbsrv", "Modbus function-code %02x not supported or invalid frame", functionCode);
             return tryToFindValidFrame;
         }
 
@@ -180,7 +180,7 @@ protected:
             = static_cast<uint16_t>(*(begin + frameSize - 2)) | (static_cast<uint16_t>(*(begin + frameSize - 1)) << 8);
         if (computedCrc != remoteCrc)
         {
-            ESP_LOGI("mbsrv", "Invalid CRC");
+            ESP_LOGW("mbsrv", "Invalid CRC");
             // computed_crc.hi = 0x" << (computed_crc >> 8) << std::dec << std::endl;
             return tryToFindValidFrame;
         }

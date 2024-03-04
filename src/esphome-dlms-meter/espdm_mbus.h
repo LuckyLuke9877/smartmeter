@@ -1,14 +1,27 @@
-/*
- * Data structure
- */
+#pragma once
 
-static const int MBUS_HEADER_INTRO_LENGTH = 4; // Header length for the intro (0x68, length, length, 0x68)
-static const int MBUS_FULL_HEADER_LENGTH = 9; // Total header length
-static const int MBUS_FOOTER_LENGTH = 2; // Footer after frame
+#include <stdint.h>
+#include <vector>
 
-static const int MBUS_MAX_FRAME_LENGTH = 250; // Maximum size of frame
+namespace esphome
+{
+namespace espdm
+{
 
-static const int MBUS_START1_OFFSET = 0; // Offset of first start byte
-static const int MBUS_LENGTH1_OFFSET = 1; // Offset of first length byte
-static const int MBUS_LENGTH2_OFFSET = 2; // Offset of (duplicated) second length byte
-static const int MBUS_START2_OFFSET = 3; // Offset of (duplicated) second start byte
+// Handles only LongFrames
+class MbusProtocol
+{
+public:
+    void AddFrameData(uint8_t data);
+    bool GetPayload(std::vector<uint8_t>& payload);
+
+private:
+    std::vector<uint8_t> m_dataBuffer;
+
+    int32_t ParseFrame(std::vector<uint8_t>& payload);
+    uint8_t CalculateChecksum(std::vector<uint8_t>::iterator begin, std::vector<uint8_t>::iterator end) const;
+    void Log(std::vector<uint8_t> data) const;
+};
+
+} // namespace espdm
+} // namespace esphome

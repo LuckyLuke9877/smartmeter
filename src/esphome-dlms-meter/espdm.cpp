@@ -1,5 +1,4 @@
 #include "espdm.h"
-#include "espdm_mbus.h"
 #include "espdm_dlms.h"
 #include "espdm_obis.h"
 #if defined(ESP8266)
@@ -21,116 +20,56 @@ void DlmsMeter::setup()
 
 void DlmsMeter::loop()
 {
-    unsigned long currentTime = millis();
-
     while (available()) // Read while data is available
     {
         uint8_t c(0);
         this->read_byte(&c);
-        this->receiveBuffer.push_back(c);
-
-        this->lastRead = currentTime;
-        // fix for ESPHOME 2022.12 -> added 10ms delay
-        delay(10);
+        m_mbus.AddFrameData(c);
     }
 
-    if (!this->receiveBuffer.empty() && currentTime - this->lastRead > this->readTimeout)
+    std::vector<uint8_t> mbusPayload; // Contains the data of the payload
+    while (m_mbus.GetPayload(mbusPayload))
     {
-        ESP_LOGI(TAG, "receiveBuffer.size() = %d bytes", receiveBuffer.size());
-        log_packet(this->receiveBuffer);
+        ESP_LOGD(TAG, "mbusPayload.size() = %d bytes", mbusPayload.size());
+        log_packet(m_dlmsData);
 
-        // Verify and parse M-Bus frames
-
-        ESP_LOGV(TAG, "Parsing M-Bus frames");
-
-        uint16_t frameOffset = 0; // Offset is used if the M-Bus message is split into multiple frames
-        std::vector<uint8_t> mbusPayload; // Contains the data of the payload
-
-        while (true)
-        {
-            ESP_LOGV(TAG, "MBUS: Parsing frame");
-
-            // Check start bytes
-            if (this->receiveBuffer[frameOffset + MBUS_START1_OFFSET] != 0x68
-                || this->receiveBuffer[frameOffset + MBUS_START2_OFFSET] != 0x68)
-            {
-                ESP_LOGE(TAG, "MBUS: Start bytes do not match");
-                return abort();
-            }
-
-            // Both length bytes must be identical
-            if (this->receiveBuffer[frameOffset + MBUS_LENGTH1_OFFSET]
-                != this->receiveBuffer[frameOffset + MBUS_LENGTH2_OFFSET])
-            {
-                ESP_LOGE(TAG, "MBUS: Length bytes do not match");
-                return abort();
-            }
-
-            uint8_t frameLength = this->receiveBuffer[frameOffset + MBUS_LENGTH1_OFFSET]; // Get length of this frame
-
-            // Check if received data is enough for the given frame length
-            if (this->receiveBuffer.size() - frameOffset < frameLength + 3)
-            {
-                ESP_LOGE(TAG, "MBUS: receiveBuffer.size[%d] smaller than frameLength[%d] for received data",
-                         receiveBuffer.size(), frameLength);
-                return abort();
-            }
-            else
-            {
-                ESP_LOGI(TAG, "MBUS: receiveBuffer.size[%d] is ok, frameLength[%d] for received data",
-                         receiveBuffer.size(), frameLength);
-            }
-
-            if (this->receiveBuffer[frameOffset + frameLength + MBUS_HEADER_INTRO_LENGTH + MBUS_FOOTER_LENGTH - 1]
-                != 0x16)
-            {
-                ESP_LOGE(TAG, "MBUS: Invalid stop byte");
-                return abort();
-            }
-
-            mbusPayload.insert(mbusPayload.end(), &this->receiveBuffer[frameOffset + MBUS_FULL_HEADER_LENGTH],
-                               &this->receiveBuffer[frameOffset + MBUS_HEADER_INTRO_LENGTH + frameLength]);
-
-            frameOffset += MBUS_HEADER_INTRO_LENGTH + frameLength + MBUS_FOOTER_LENGTH;
-
-            if (frameOffset >= this->receiveBuffer.size()) // No more data to read, exit loop
-            {
-                break;
-            }
-        }
+        // trim mbusPayload to work with original code where first 5 bytes were skipped
+        const auto originalCodeRemovedByte = 5;
+        m_dlmsData.insert(m_dlmsData.end(), mbusPayload.begin() + originalCodeRemovedByte, mbusPayload.end());
 
         // Verify and parse DLMS header
+        // Always abort parsing if the data do not match the protocol
 
         ESP_LOGV(TAG, "Parsing DLMS header");
 
-        if (mbusPayload.size() < 20) // If the payload is too short we need to abort
+        if (m_dlmsData.size() < 20) // If the payload is too short we need to abort
         {
             ESP_LOGE(TAG, "DLMS: Payload too short");
-            return abort();
+            return AbortDlmsParsing();
         }
 
-        if (mbusPayload[DLMS_CIPHER_OFFSET] != 0xDB) // Only general-glo-ciphering is supported (0xDB)
+        if (m_dlmsData[DLMS_CIPHER_OFFSET] != 0xDB) // Only general-glo-ciphering is supported (0xDB)
         {
             ESP_LOGE(TAG, "DLMS: Unsupported cipher");
-            return abort();
+            return AbortDlmsParsing();
         }
 
-        uint8_t systitleLength = mbusPayload[DLMS_SYST_OFFSET];
+        uint8_t systitleLength = m_dlmsData[DLMS_SYST_OFFSET];
 
         if (systitleLength != 0x08) // Only system titles with length of 8 are supported
         {
             ESP_LOGE(TAG, "DLMS: Unsupported system title length");
-            return abort();
+            return AbortDlmsParsing();
         }
 
-        uint16_t messageLength = mbusPayload[DLMS_LENGTH_OFFSET];
+        uint16_t messageLength = m_dlmsData[DLMS_LENGTH_OFFSET];
         int headerOffset = 0;
 
         if (messageLength == 0x82)
         {
             ESP_LOGV(TAG, "DLMS: Message length > 127");
 
-            memcpy(&messageLength, &mbusPayload[DLMS_LENGTH_OFFSET + 1], 2);
+            memcpy(&messageLength, &m_dlmsData[DLMS_LENGTH_OFFSET + 1], 2);
             messageLength = swap_uint16(messageLength);
 
             headerOffset = DLMS_HEADER_EXT_OFFSET; // Header is now 2 bytes longer due to length > 127
@@ -143,16 +82,20 @@ void DlmsMeter::loop()
         messageLength
             -= DLMS_LENGTH_CORRECTION; // Correct message length due to part of header being included in length
 
-        if (mbusPayload.size() - DLMS_HEADER_LENGTH - headerOffset != messageLength)
+        if (m_dlmsData.size() - DLMS_HEADER_LENGTH - headerOffset != messageLength)
         {
-            ESP_LOGE(TAG, "DLMS: Message has invalid length");
-            return abort();
+            // Note: Kaifa309M sends multiple(2) mbus-frames for one dlms-frame, this is normal flow.
+            ESP_LOGD(TAG, "DLMS: Frame[%d] has not enough data yet, current length[%d]", messageLength,
+                     m_dlmsData.size() - DLMS_HEADER_LENGTH - headerOffset);
+            continue; // Wait for more data to come
         }
 
-        if (mbusPayload[headerOffset + DLMS_SECBYTE_OFFSET] != 0x21) // Only certain security suite is supported (0x21)
+        // Now we have enough data for the dlms frame.
+
+        if (m_dlmsData[headerOffset + DLMS_SECBYTE_OFFSET] != 0x21) // Only certain security suite is supported (0x21)
         {
             ESP_LOGE(TAG, "DLMS: Unsupported security control byte");
-            return abort();
+            return AbortDlmsParsing();
         }
 
         // Decryption
@@ -162,14 +105,14 @@ void DlmsMeter::loop()
         uint8_t iv[12]; // Reserve space for the IV, always 12 bytes
         // Copy system title to IV (System title is before length; no header offset needed!)
         // Add 1 to the offset in order to skip the system title length byte
-        memcpy(&iv[0], &mbusPayload[DLMS_SYST_OFFSET + 1], systitleLength);
-        memcpy(&iv[8], &mbusPayload[headerOffset + DLMS_FRAMECOUNTER_OFFSET],
+        memcpy(&iv[0], &m_dlmsData[DLMS_SYST_OFFSET + 1], systitleLength);
+        memcpy(&iv[8], &m_dlmsData[headerOffset + DLMS_FRAMECOUNTER_OFFSET],
                DLMS_FRAMECOUNTER_LENGTH); // Copy frame counter to IV
 
         uint8_t plaintext[messageLength];
 
 #if defined(ESP8266)
-        memcpy(plaintext, &mbusPayload[headerOffset + DLMS_PAYLOAD_OFFSET], messageLength);
+        memcpy(plaintext, &m_dlmsData[headerOffset + DLMS_PAYLOAD_OFFSET], messageLength);
         br_gcm_context gcmCtx;
         br_aes_ct_ctr_keys bc;
         br_aes_ct_ctr_init(&bc, this->key, this->keyLength);
@@ -182,7 +125,7 @@ void DlmsMeter::loop()
         mbedtls_gcm_setkey(&this->aes, MBEDTLS_CIPHER_ID_AES, this->key, this->keyLength * 8);
 
         mbedtls_gcm_auth_decrypt(&this->aes, messageLength, iv, sizeof(iv), NULL, 0, NULL, 0,
-                                 &mbusPayload[headerOffset + DLMS_PAYLOAD_OFFSET], plaintext);
+                                 &m_dlmsData[headerOffset + DLMS_PAYLOAD_OFFSET], plaintext);
 
         mbedtls_gcm_free(&this->aes);
 #else
@@ -192,7 +135,7 @@ void DlmsMeter::loop()
         if (plaintext[0] != 0x0F || plaintext[5] != 0x0C)
         {
             ESP_LOGE(TAG, "OBIS: Packet was decrypted but data is invalid");
-            return abort();
+            return AbortDlmsParsing();
         }
 
         // Decoding
@@ -206,7 +149,7 @@ void DlmsMeter::loop()
             if (plaintext[currentPosition + OBIS_TYPE_OFFSET] != DataType::OctetString)
             {
                 ESP_LOGE(TAG, "OBIS: Unsupported OBIS header type");
-                return abort();
+                return AbortDlmsParsing();
             }
 
             uint8_t obisCodeLength = plaintext[currentPosition + OBIS_LENGTH_OFFSET];
@@ -214,7 +157,7 @@ void DlmsMeter::loop()
             if (obisCodeLength != 0x06)
             {
                 ESP_LOGE(TAG, "OBIS: Unsupported OBIS header length");
-                return abort();
+                return AbortDlmsParsing();
             }
 
             uint8_t obisCode[obisCodeLength];
@@ -312,7 +255,7 @@ void DlmsMeter::loop()
             else
             {
                 ESP_LOGE(TAG, "OBIS: Unsupported OBIS medium");
-                return abort();
+                return AbortDlmsParsing();
             }
 
             uint8_t uint8Value;
@@ -422,8 +365,7 @@ void DlmsMeter::loop()
                 break;
             default:
                 ESP_LOGE(TAG, "OBIS: Unsupported OBIS data type");
-                return abort();
-                break;
+                return AbortDlmsParsing();
             }
 
             currentPosition += dataLength; // Skip data length
@@ -435,9 +377,8 @@ void DlmsMeter::loop()
                     += 6; // Skip additional data and additional break; this will jump out of bounds on last frame
         } while (currentPosition <= messageLength); // Loop until arrived at end
 
-        this->receiveBuffer.clear(); // Reset buffer
-
-        ESP_LOGI(TAG, "Received valid data");
+        ESP_LOGD(TAG, "Received valid data");
+        m_dlmsData.clear();
 
 #if defined(USE_MQTT)
         if (this->mqtt_client != NULL)
@@ -504,9 +445,9 @@ void DlmsMeter::loop()
     }
 }
 
-void DlmsMeter::abort()
+void DlmsMeter::AbortDlmsParsing()
 {
-    this->receiveBuffer.clear();
+    m_dlmsData.clear();
 }
 
 uint16_t DlmsMeter::swap_uint16(uint16_t val)
@@ -572,7 +513,7 @@ void DlmsMeter::enable_mqtt(mqtt::MQTTClientComponent* mqtt_client, const char* 
 
 void DlmsMeter::log_packet(std::vector<uint8_t> data)
 {
-    ESP_LOGI(TAG, format_hex_pretty(data).c_str());
+    ESP_LOGD(TAG, format_hex_pretty(data).c_str());
 }
 
 void DlmsMeter::RegisterForMeterData(DlmsMeter::OnReceiveMeterData onReceive)

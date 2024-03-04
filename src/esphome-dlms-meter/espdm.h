@@ -4,6 +4,7 @@
 #if defined(ESP32)
     #include "mbedtls/gcm.h"
 #endif
+#include "espdm_mbus.h"
 
 #include <math.h>
 
@@ -21,6 +22,12 @@ class DlmsMeter : public Component, public uart::UARTDevice
 public:
     struct MeterData
     {
+        void GetVoltage(float& value1, float& value2, float& value3) const
+        {
+            value1 = voltageL1;
+            value2 = voltageL2;
+            value3 = voltageL3;
+        }
         float GetAverageVoltage() const
         {
             int count(0);
@@ -30,15 +37,44 @@ public:
 
             return count == 0 ? 0.0f : (voltageL1 + voltageL2 + voltageL3) / static_cast<float>(count);
         }
-        float GetApparentPower() const
+        void GetCurrent(float& total, float& value1, float& value2, float& value3) const
+        {
+            value1 = currentL1;
+            value2 = currentL2;
+            value3 = currentL3;
+            total = value1 + value2 + value3;
+        }
+        void GetApparentPower(float& total, float& value1, float& value2, float& value3) const
         {
             // Scheinleistung
-            return voltageL1 * currentL1 + voltageL2 * currentL2 + voltageL3 * currentL3;
+            value1 = voltageL1 * currentL1;
+            value2 = voltageL2 * currentL2;
+            value3 = voltageL3 * currentL3;
+            total = value1 + value2 + value3;
+        }
+        void GetPower(float& total, float& value1, float& value2, float& value3) const
+        {
+            // Wirkleistung
+            const auto powerFactor = GetPowerFactor();
+            value1 = voltageL1 * currentL1 * powerFactor;
+            value2 = voltageL2 * currentL2 * powerFactor;
+            value3 = voltageL3 * currentL3 * powerFactor;
+            total = value1 + value2 + value3;
+        }
+        void GetReactivePower(float& total, float& value1, float& value2, float& value3) const
+        {
+            // Blindleistung
+            const auto reactivePowerFactor = 1.0f - GetPowerFactor();
+            value1 = voltageL1 * currentL1 * reactivePowerFactor;
+            value2 = voltageL2 * currentL2 * reactivePowerFactor;
+            value3 = voltageL3 * currentL3 * reactivePowerFactor;
+            total = value1 + value2 + value3;
         }
         float GetPowerFactor() const
         {
-            const auto apparentPower = GetApparentPower();
-            return apparentPower != 0 ? activePowerPlus / apparentPower : 1.0f;
+            float total(0.0f), value1(0.0f), value2(0.0f), value3(0.0f);
+            GetApparentPower(total, value1, value2, value3);
+            return total != 0 ? activePowerPlus / total : 1.0f;
         }
         static float GetPhaseToPhaseVoltage(float voltage)
         {
@@ -58,6 +94,7 @@ public:
         float reactiveEnergyPlus{0.0f};
         float reactiveEnergyMinus{0.0f};
     };
+
     using OnReceiveMeterData = std::function<void(const MeterData& data)>;
 
     DlmsMeter(uart::UARTComponent* parent);
@@ -81,9 +118,8 @@ public:
     void RegisterForMeterData(OnReceiveMeterData onReceive);
 
 private:
-    std::vector<uint8_t> receiveBuffer; // Stores the packet currently being received
-    unsigned long lastRead = 0; // Timestamp when data was last read
-    int readTimeout = 100; // Time to wait after last byte before considering data complete
+    MbusProtocol m_mbus;
+    std::vector<uint8_t> m_dlmsData;
 
     uint8_t key[16]; // Stores the decryption key
     size_t keyLength; // Stores the decryption key length (usually 16 bytes)
@@ -121,7 +157,7 @@ private:
     uint16_t swap_uint16(uint16_t val);
     uint32_t swap_uint32(uint32_t val);
     void log_packet(std::vector<uint8_t> data);
-    void abort();
+    void AbortDlmsParsing();
 };
 } // namespace espdm
 } // namespace esphome

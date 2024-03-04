@@ -13,8 +13,7 @@ using namespace modbus;
 using namespace sunspec;
 
 constexpr uint8_t SMART_METER_ADDRESS = 1;
-constexpr uint32_t BLINK_OFF_COUNT = 5; // 5 * 16ms
-constexpr float UNKNOWN_VALUE = 0.0f;
+constexpr uint32_t BLINK_OFF_COUNT = 5; // 5 * 16ms => led is ~80ms on when blinking
 
 class SmartMeter : public Component, public sensor::Sensor
 {
@@ -58,7 +57,7 @@ public:
 
     void setup() override
     {
-        ESP_LOGI("sm", "setup() called");
+        ESP_LOGD("sm", "setup() called");
         m_dlmsMeter.setup();
 
         // Hack
@@ -93,10 +92,14 @@ public:
     void OnReceiveMeterData(const espdm::DlmsMeter::MeterData& data)
     {
         // Set Sunspec meter data
-        m_meterModel.SetVoltageToNeutral(data.GetAverageVoltage(), data.voltageL1, data.voltageL2, data.voltageL3);
+        // Note: not all phase related values are available, provide some narrowed values
+        float total(0.0f), value1(0.0f), value2(0.0f), value3(0.0f);
 
-        m_meterModel.SetAcCurrent(data.currentL1 + data.currentL2 + data.currentL3, data.currentL1, data.currentL2,
-                                  data.currentL3);
+        data.GetVoltage(value1, value2, value3);
+        m_meterModel.SetVoltageToNeutral(data.GetAverageVoltage(), value1, value2, value3);
+
+        data.GetCurrent(total, value1, value2, value3);
+        m_meterModel.SetAcCurrent(total, value1, value2, value3);
 
         m_meterModel.SetVoltagePhaseToPhase(
             data.GetPhaseToPhaseVoltage(data.GetAverageVoltage()), data.GetPhaseToPhaseVoltage(data.voltageL1),
@@ -104,10 +107,10 @@ public:
 
         m_meterModel.SetFrequency(50.0f);
 
-        const float powerPerPhase = data.activePowerPlus / 3.0f;
-        m_meterModel.SetPower(data.activePowerPlus, powerPerPhase, powerPerPhase, powerPerPhase);
-
-        m_meterModel.SetPowerFactor(data.GetPowerFactor(), UNKNOWN_VALUE, UNKNOWN_VALUE, UNKNOWN_VALUE);
+        // No idea why Fronius inverter shows it as negative number
+        const auto powerFactor = data.GetPowerFactor();
+        m_meterModel.SetPowerFactor(powerFactor, powerFactor, powerFactor, powerFactor);
+        ESP_LOGD("sm", "powerFactor = %f", powerFactor);
 
         const float activeEnergyPerPhase = data.activeEnergyPlus / 3.0f;
         m_meterModel.SetTotalWattHoursImported(data.activeEnergyPlus, activeEnergyPerPhase, activeEnergyPerPhase,
@@ -117,7 +120,16 @@ public:
         m_meterModel.SetTotalVaHoursImported(data.reactiveEnergyPlus, reactiveEnergyPerPhase, reactiveEnergyPerPhase,
                                              reactiveEnergyPerPhase);
 
-        ESP_LOGI("sm", "MeterModel data updated");
+        data.GetPower(total, value1, value2, value3);
+        m_meterModel.SetPower(total, value1, value2, value3);
+
+        data.GetApparentPower(total, value1, value2, value3);
+        m_meterModel.SetApparentPower(total, value1, value2, value3);
+
+        data.GetReactivePower(total, value1, value2, value3);
+        m_meterModel.SetReactivePower(total, value1, value2, value3);
+
+        ESP_LOGD("sm", "MeterModel data updated");
     }
 
     ModbusServer::ResponseRead OnModbusReceiveRequest(uint8_t functionCode, const ModbusServer::RequestRead& request)
@@ -130,7 +142,7 @@ public:
         }
         else
         {
-            ESP_LOGI("sm", "Modbus request received: address = %d, count = %d", request.startAddress,
+            ESP_LOGD("sm", "Modbus request received: address = %d, count = %d", request.startAddress,
                      request.addressCount);
             if (m_meterModel.IsValidAddressRange(request.startAddress, request.addressCount) == false)
             {
