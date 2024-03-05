@@ -199,7 +199,7 @@ protected:
         }
         else
         {
-            ESP_LOGI("mbsrv", "Not our[%d] address = %d", m_address, address);
+            ESP_LOGD("mbsrv", "Not our[%d] address = %d", m_address, address);
         }
 
         // Frame can be removed

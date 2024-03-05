@@ -74,7 +74,8 @@ public:
         {
             float total(0.0f), value1(0.0f), value2(0.0f), value3(0.0f);
             GetApparentPower(total, value1, value2, value3);
-            return total != 0 ? activePowerPlus / total : 1.0f;
+            // cos-phi = Wirkleistung / Scheinleistung
+            return total != 0.0f ? std::fabs((activePowerPlus - activePowerMinus) / total) : 1.0f;
         }
         static float GetPhaseToPhaseVoltage(float voltage)
         {

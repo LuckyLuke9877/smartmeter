@@ -380,6 +380,15 @@ void DlmsMeter::loop()
         ESP_LOGD(TAG, "Received valid data");
         m_dlmsData.clear();
 
+        // Apply sign to current to show the direction of current flow
+        if ((active_power_plus->state - active_power_minus->state) < 0.0f)
+        {
+            // Providing power to grid ( Einspeisung ) => negative current flow
+            current_l1->publish_state(-current_l1->state);
+            current_l2->publish_state(-current_l2->state);
+            current_l3->publish_state(-current_l3->state);
+        }
+
 #if defined(USE_MQTT)
         if (this->mqtt_client != NULL)
         {

@@ -35,22 +35,21 @@ public:
             = {0x38, 0x68, 0x68, 0x69, 0x71, 0x7A, 0x32, 0x45, 0x6B, 0x75, 0x53, 0x48, 0x53, 0x4B, 0x51, 0x37};
         m_dlmsMeter.set_key(key, 16); // Pass your decryption key and key length here
 
-        m_dlmsMeter.set_voltage_sensors(&id(meter01_voltage_l1), &id(meter01_voltage_l2),
-                                        &id(meter01_voltage_l3)); // Set sensors to use for voltage (optional)
+        m_dlmsMeter.set_voltage_sensors(&id(voltage_l1), &id(voltage_l2),
+                                        &id(voltage_l3)); // Set sensors to use for voltage (optional)
 
-        m_dlmsMeter.set_current_sensors(&id(meter01_current_l1), &id(meter01_current_l2),
-                                        &id(meter01_current_l3)); // Set sensors to use for current (optional)
+        m_dlmsMeter.set_current_sensors(&id(current_l1), &id(current_l2),
+                                        &id(current_l3)); // Set sensors to use for current (optional)
 
-        m_dlmsMeter.set_active_power_sensors(
-            &id(meter01_active_power_plus),
-            &id(meter01_active_power_minus)); // Set sensors to use for active power (optional)
+        m_dlmsMeter.set_active_power_sensors(&id(active_power_plus),
+                                             &id(active_power_minus)); // Set sensors to use for active power (optional)
 
         m_dlmsMeter.set_active_energy_sensors(
-            &id(meter01_active_energy_plus),
-            &id(meter01_active_energy_minus)); // Set sensors to use for active energy (optional)
+            &id(active_energy_plus),
+            &id(active_energy_minus)); // Set sensors to use for active energy (optional)
         m_dlmsMeter.set_reactive_energy_sensors(
-            &id(meter01_reactive_energy_plus),
-            &id(meter01_reactive_energy_minus)); // Set sensors to use for reactive energy (optional)
+            &id(reactive_energy_plus),
+            &id(reactive_energy_minus)); // Set sensors to use for reactive energy (optional)
 
         m_dlmsMeter.RegisterForMeterData([this](const espdm::DlmsMeter::MeterData& data) { OnReceiveMeterData(data); });
     }
@@ -59,18 +58,6 @@ public:
     {
         ESP_LOGD("sm", "setup() called");
         m_dlmsMeter.setup();
-
-        // Hack
-        espdm::DlmsMeter::MeterData md;
-        md.activeEnergyPlus = 10000.0f;
-        md.activePowerPlus = 100.0f;
-        md.voltageL1 = 230.1f;
-        md.voltageL2 = 230.2f;
-        md.voltageL3 = 230.3f;
-        md.currentL1 = 1.01f;
-        md.currentL2 = 1.02f;
-        md.currentL3 = 1.03f;
-        // OnReceiveMeterData(md);
     }
 
     void loop() override
@@ -110,7 +97,7 @@ public:
         // No idea why Fronius inverter shows it as negative number
         const auto powerFactor = data.GetPowerFactor();
         m_meterModel.SetPowerFactor(powerFactor, powerFactor, powerFactor, powerFactor);
-        ESP_LOGD("sm", "powerFactor = %f", powerFactor);
+        id(power_factor).publish_state(powerFactor);
 
         const float activeEnergyPerPhase = data.activeEnergyPlus / 3.0f;
         m_meterModel.SetTotalWattHoursImported(data.activeEnergyPlus, activeEnergyPerPhase, activeEnergyPerPhase,
@@ -125,6 +112,7 @@ public:
 
         data.GetApparentPower(total, value1, value2, value3);
         m_meterModel.SetApparentPower(total, value1, value2, value3);
+        id(apparent_power).publish_state(total);
 
         data.GetReactivePower(total, value1, value2, value3);
         m_meterModel.SetReactivePower(total, value1, value2, value3);
