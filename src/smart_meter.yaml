@@ -61,7 +61,7 @@ uart:
     baud_rate: 2400
     stop_bits: 1
     rx_buffer_size: 1024 # Needed to receive the large packets send by the smart meter
-    # mbus board:
+    # mbus board wiring:
     # GND => Esp.GND
     # 3.3V => Esp.VDD
     # RX => Esp.tx_pin(5)
@@ -186,7 +186,7 @@ sensor:
 
   - platform: template
     id: reactive_energy_plus
-    name: 3.2 Gesamt Blindleistung Plus
+    name: 3.2 Gesamt Blindenergie Plus
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: "energy"
@@ -195,7 +195,7 @@ sensor:
       - multiply: 0.001
   - platform: template
     id: reactive_energy_minus
-    name: 3.3 Gesamt Blindleistung Minus
+    name: 3.3 Gesamt Blindenergie Minus
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: "energy"
@@ -217,16 +217,7 @@ sensor:
     sensors:
     - name: "SmartMeter"
       id: smart_meter
-      internal: true
-    # "name" order must match the GetSensors() - m_queries
-  #   - name: "4.1 Aussen Temperatur"
-  #   - name: "4.2 Warmwasser Temperatur"
-  #   - name: "4.3 Mischer Soll Temperatur"
-  #   - name: "4.4 Mischer Temperatur"
-  #   - name: "4.5 Wp Vorlauf Temperatur"
-  #   - name: "4.6 Rücklauf Temperatur"
-  #   - name: "4.7 El Verbrauch WW"
-  #   - name: "4.8 El Verbrauch Heizen"
+      internal: true # not visible in UI
     lambda: |-
       auto sm = new sm::SmartMeter(id(uart_modbus), id(mbus));
       App.register_component(sm);
