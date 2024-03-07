@@ -1,6 +1,7 @@
 esphome:
   name: smartmeter
-  includes: 
+  includes:
+    - ./esphome-dlms-meter
     - sunspec_meter_model.h
     - modbus_server.h
     - smart_meter.h
@@ -27,7 +28,7 @@ preferences:
 
 # Enable logging
 logger:
-  level: DEBUG
+  level: INFO
 
 ota:
   password: !secret ota_password
@@ -48,14 +49,26 @@ web_server:
   port: 80
 
 uart:
- id: uart_modbus
- tx_pin: 22
- rx_pin: 21
- baud_rate: 115200
- stop_bits: 1
- rx_buffer_size: 1024
-#  debug:
- 
+  - id: uart_modbus
+    tx_pin: 22
+    rx_pin: 21
+    baud_rate: 9600
+    stop_bits: 1
+    rx_buffer_size: 1024
+  - id: mbus
+    tx_pin: 5  # or ( it doesn't send anything )
+    rx_pin: 18 # ge
+    baud_rate: 2400
+    stop_bits: 1
+    rx_buffer_size: 1024 # Needed to receive the large packets send by the smart meter
+    # mbus board wiring:
+    # GND => Esp.GND
+    # 3.3V => Esp.VDD
+    # RX => Esp.tx_pin(5)
+    # TX => Esp.rx_pin(18)
+    # MBUS1 => Kaifa.RJ11.3
+    # MBUS2 => Kaifa.RJ11.4
+
 output:
 # to enable RS485 chip and 5V power
   - platform: gpio
@@ -80,8 +93,119 @@ light:
     default_transition_length: 0s
 
 sensor:
+  - platform: template
+    id: voltage_l1
+    name: 2.0 Spannung L1
+    unit_of_measurement: V
+    accuracy_decimals: 1
+    device_class: "voltage"
+    state_class: "measurement"
+  - platform: template
+    id: voltage_l2
+    name: 2.1 Spannung L2
+    unit_of_measurement: V
+    accuracy_decimals: 1
+    device_class: "voltage"
+    state_class: "measurement"
+  - platform: template
+    id: voltage_l3
+    name: 2.2 Spannung L3
+    unit_of_measurement: V
+    accuracy_decimals: 1
+    device_class: "voltage"
+    state_class: "measurement"
+
+  - platform: template
+    id: current_l1
+    name: 2.3 Strom L1
+    unit_of_measurement: A
+    accuracy_decimals: 2
+    device_class: "current"
+    state_class: "measurement"
+  - platform: template
+    id: current_l2
+    name: 2.4 Strom L2
+    unit_of_measurement: A
+    accuracy_decimals: 2
+    device_class: "current"
+    state_class: "measurement"
+  - platform: template
+    id: current_l3
+    name: 2.5 Strom L3
+    unit_of_measurement: A
+    accuracy_decimals: 2
+    device_class: "current"
+    state_class: "measurement"
+
+  - platform: template
+    id: active_power_plus
+    name: 1.0 Momentan Leistung Bezug
+    unit_of_measurement: W
+    accuracy_decimals: 0
+    device_class: "power"
+    state_class: "measurement"
+  - platform: template
+    id: active_power_minus
+    name: 1.1 Momentan Leistung Einspeisung
+    unit_of_measurement: W
+    accuracy_decimals: 0
+    device_class: "power"
+    state_class: "measurement"
+  - platform: template
+    id: apparent_power
+    name: 1.2 Momentan Scheinleistung
+    unit_of_measurement: VA
+    accuracy_decimals: 0
+    device_class: "power"
+    state_class: "measurement"
+  - platform: template
+    id: power_factor
+    name: 1.3 cos-phi
+    accuracy_decimals: 3
+    device_class: "power"
+    state_class: "measurement"
+
+  - platform: template
+    id: active_energy_plus
+    name: 3.0 Gesamt Energy Bezug
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "total_increasing"
+    filters:
+      - multiply: 0.001
+  - platform: template
+    id: active_energy_minus
+    name: 3.1 Gesamt Energy Einspeisung
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "total_increasing"
+    filters:
+      - multiply: 0.001
+
+  - platform: template
+    id: reactive_energy_plus
+    name: 3.2 Gesamt Blindenergie Plus
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "total_increasing"
+    filters:
+      - multiply: 0.001
+  - platform: template
+    id: reactive_energy_minus
+    name: 3.3 Gesamt Blindenergie Minus
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "total_increasing"
+    filters:
+      - multiply: 0.001
+          
+
   - platform: wifi_signal
-    name: "5.0 WiFi Signal Stärke"
+    name: "4.0 WiFi Signal Stärke"
     update_interval: 3s
     filters:
       - median:
@@ -93,17 +217,8 @@ sensor:
     sensors:
     - name: "SmartMeter"
       id: smart_meter
-      internal: true
-    # "name" order must match the GetSensors() - m_queries
-  #   - name: "4.1 Aussen Temperatur"
-  #   - name: "4.2 Warmwasser Temperatur"
-  #   - name: "4.3 Mischer Soll Temperatur"
-  #   - name: "4.4 Mischer Temperatur"
-  #   - name: "4.5 Wp Vorlauf Temperatur"
-  #   - name: "4.6 Rücklauf Temperatur"
-  #   - name: "4.7 El Verbrauch WW"
-  #   - name: "4.8 El Verbrauch Heizen"
+      internal: true # not visible in UI
     lambda: |-
-      auto sm = new sm::SmartMeter(id(uart_modbus));
+      auto sm = new sm::SmartMeter(id(uart_modbus), id(mbus));
       App.register_component(sm);
       return sm->GetSensors();
