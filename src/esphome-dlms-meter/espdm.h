@@ -8,7 +8,7 @@
 
 #include <math.h>
 
-static const char* ESPDM_VERSION = "0.9.0";
+static const char* ESPDM_VERSION = "1.0.0";
 static const char* TAG = "espdm";
 
 namespace esphome

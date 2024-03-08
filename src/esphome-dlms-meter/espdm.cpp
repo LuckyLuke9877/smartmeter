@@ -7,8 +7,24 @@
 
 namespace esphome
 {
+
+void PublishSensorState(sensor::Sensor& sensor, float value, float impossibleLimit = 0.0f)
+{
+    if (impossibleLimit != 0.0f && value > impossibleLimit)
+    {
+        ESP_LOGE(TAG, "%s value[%f] is greater than limit[%f]. Set it to 0.0.", sensor.get_name().c_str(), value,
+                 impossibleLimit);
+        value = 0.0f;
+    }
+    sensor.publish_state(value);
+}
+
 namespace espdm
 {
+constexpr auto IMPOSSIBLE_VOLTAGE_LIMIT = 300.0f;
+constexpr auto IMPOSSIBLE_CURRENT_LIMIT = 32.0f; // No more than 32Ampere for normal house
+constexpr auto IMPOSSIBLE_POWER_LIMIT = IMPOSSIBLE_CURRENT_LIMIT * 230.0f * 3.0f;
+
 DlmsMeter::DlmsMeter(uart::UARTComponent* parent)
     : uart::UARTDevice(parent)
 { }
@@ -275,10 +291,10 @@ void DlmsMeter::loop()
 
                 if (codeType == CodeType::ActivePowerPlus && this->active_power_plus != NULL
                     && this->active_power_plus->state != floatValue)
-                    this->active_power_plus->publish_state(floatValue);
+                    PublishSensorState(*active_power_plus, floatValue, IMPOSSIBLE_POWER_LIMIT);
                 else if (codeType == CodeType::ActivePowerMinus && this->active_power_minus != NULL
                          && this->active_power_minus->state != floatValue)
-                    this->active_power_minus->publish_state(floatValue);
+                    PublishSensorState(*active_power_minus, floatValue, IMPOSSIBLE_POWER_LIMIT);
 
                 else if (codeType == CodeType::ActiveEnergyPlus && this->active_energy_plus != NULL
                          && this->active_energy_plus->state != floatValue)
@@ -310,23 +326,23 @@ void DlmsMeter::loop()
 
                 if (codeType == CodeType::VoltageL1 && this->voltage_l1 != NULL
                     && this->voltage_l1->state != floatValue)
-                    this->voltage_l1->publish_state(floatValue);
+                    PublishSensorState(*voltage_l1, floatValue, IMPOSSIBLE_VOLTAGE_LIMIT);
                 else if (codeType == CodeType::VoltageL2 && this->voltage_l2 != NULL
                          && this->voltage_l2->state != floatValue)
-                    this->voltage_l2->publish_state(floatValue);
+                    PublishSensorState(*voltage_l2, floatValue, IMPOSSIBLE_VOLTAGE_LIMIT);
                 else if (codeType == CodeType::VoltageL3 && this->voltage_l3 != NULL
                          && this->voltage_l3->state != floatValue)
-                    this->voltage_l3->publish_state(floatValue);
+                    PublishSensorState(*voltage_l3, floatValue, IMPOSSIBLE_VOLTAGE_LIMIT);
 
                 else if (codeType == CodeType::CurrentL1 && this->current_l1 != NULL
                          && this->current_l1->state != floatValue)
-                    this->current_l1->publish_state(floatValue);
+                    PublishSensorState(*current_l1, floatValue, IMPOSSIBLE_CURRENT_LIMIT);
                 else if (codeType == CodeType::CurrentL2 && this->current_l2 != NULL
                          && this->current_l2->state != floatValue)
-                    this->current_l2->publish_state(floatValue);
+                    PublishSensorState(*current_l2, floatValue, IMPOSSIBLE_CURRENT_LIMIT);
                 else if (codeType == CodeType::CurrentL3 && this->current_l3 != NULL
                          && this->current_l3->state != floatValue)
-                    this->current_l3->publish_state(floatValue);
+                    PublishSensorState(*current_l3, floatValue, IMPOSSIBLE_CURRENT_LIMIT);
 
                 break;
             case DataType::OctetString:

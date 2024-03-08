@@ -167,7 +167,7 @@ sensor:
 
   - platform: template
     id: active_energy_plus
-    name: 3.0 Gesamt Energy Bezug
+    name: 3.0 Gesamt Energie Bezug
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: "energy"
@@ -176,7 +176,7 @@ sensor:
       - multiply: 0.001
   - platform: template
     id: active_energy_minus
-    name: 3.1 Gesamt Energy Einspeisung
+    name: 3.1 Gesamt Energie Einspeisung
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: "energy"
