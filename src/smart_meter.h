@@ -26,6 +26,7 @@ public:
         , m_dlmsMeter(uartMbus)
         , m_meterModel(SMART_METER_ADDRESS)
     {
+        m_lastEnergyTime.timestamp = 0;
         m_modbusServer.set_uart_parent(uartModbus);
         // None GUI sensor, just to get access from yaml if needed.
         set_internal(true);
@@ -117,6 +118,7 @@ public:
         data.GetReactivePower(total, value1, value2, value3);
         m_meterModel.SetReactivePower(total, value1, value2, value3);
 
+        SetEnergyFlow();
         ESP_LOGD("sm", "MeterModel data updated");
     }
 
@@ -146,12 +148,28 @@ public:
         return response;
     }
 
+    void ResetEnergyFlow()
+    {
+        auto now = id(sntp_time).now();
+        if (!now.is_valid())
+        {
+            return;
+        }
+        m_lastEnergyTime = now;
+        m_lastEnergyPlus = id(active_energy_plus).state;
+        m_lastEnergyMinus = id(active_energy_minus).state;
+        SetEnergyFlow();
+        ESP_LOGI("sm", "Reset energy flow at %s", now.strftime("%y-%m-%d %H:%M:%S").c_str());
+    }
+
 private:
-    // sensor::Sensor m_sensor;
     ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
     MeterModel m_meterModel;
     uint32_t m_statusLedBlinkCount{0};
+    float m_lastEnergyPlus{0.0f};
+    float m_lastEnergyMinus{0.0f};
+    time::ESPTime m_lastEnergyTime;
 
     void SetStatusLed(bool on, bool error = false)
     {
@@ -181,6 +199,28 @@ private:
         }
         call.perform();
         m_statusLedBlinkCount = 1;
+    }
+
+    void SetEnergyFlow()
+    {
+        auto now = id(sntp_time).now();
+        if (!now.is_valid() || m_lastEnergyTime.timestamp == 0)
+        {
+            id(energy_flow).publish_state("-- : --");
+            return;
+        }
+        auto durationSec = now.timestamp - m_lastEnergyTime.timestamp;
+        auto energyFlow
+            = ((id(active_energy_plus).state - m_lastEnergyPlus) - (id(active_energy_minus).state - m_lastEnergyMinus))
+            * 1000.0f;
+
+        const auto secPerHour = 3600.0f;
+        const auto secPerDay = secPerHour * 24.0f;
+        const uint32_t days = durationSec / secPerDay;
+        const float hours = (durationSec - days * secPerDay) / secPerHour;
+        char temp[64] = {0};
+        sprintf(temp, "%dd %.2fh : %.0fWh", days, hours, energyFlow);
+        id(energy_flow).publish_state(temp);
     }
 };
 

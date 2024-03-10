@@ -202,7 +202,6 @@ sensor:
     state_class: "total_increasing"
     filters:
       - multiply: 0.001
-          
 
   - platform: wifi_signal
     name: "4.0 WiFi Signal Stärke"
@@ -222,3 +221,26 @@ sensor:
       auto sm = new sm::SmartMeter(id(uart_modbus), id(mbus));
       App.register_component(sm);
       return sm->GetSensors();
+
+text_sensor:
+  - platform: template
+    name: 5.0 Energiefluss
+    id: energy_flow
+    update_interval: never
+
+button:
+  - platform: restart
+    name: "6.0 Reboot"
+
+  - platform: template
+    name: "5.1 Reset Energiefluss"
+    id: reset_energy_flow
+    on_press:
+      then:
+        - lambda: |-
+            static_cast<sm::SmartMeter*>(id(smart_meter))->ResetEnergyFlow();
+
+time:
+  - platform: sntp
+    id: sntp_time
+       
