@@ -187,7 +187,7 @@ sensor:
   - platform: template
     id: reactive_energy_plus
     name: 3.2 Gesamt Blindenergie Plus
-    unit_of_measurement: kWh
+    unit_of_measurement: kvarh
     accuracy_decimals: 3
     device_class: "energy"
     state_class: "total_increasing"
@@ -196,7 +196,7 @@ sensor:
   - platform: template
     id: reactive_energy_minus
     name: 3.3 Gesamt Blindenergie Minus
-    unit_of_measurement: kWh
+    unit_of_measurement: kvarh
     accuracy_decimals: 3
     device_class: "energy"
     state_class: "total_increasing"
