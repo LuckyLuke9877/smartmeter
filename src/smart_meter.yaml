@@ -1,5 +1,6 @@
 esphome:
   name: smartmeter
+  friendly_name: Smart-Meter
   includes:
     - ./esphome-dlms-meter
     - sunspec_meter_model.h
@@ -153,14 +154,14 @@ sensor:
     state_class: "measurement"
   - platform: template
     id: apparent_power
-    name: 1.2 Momentan Scheinleistung
+    name: 2.6 Momentan Scheinleistung
     unit_of_measurement: VA
     accuracy_decimals: 0
     device_class: "power"
     state_class: "measurement"
   - platform: template
     id: power_factor
-    name: 1.3 cos-phi
+    name: 2.7 cos-phi
     accuracy_decimals: 3
     device_class: "power"
     state_class: "measurement"
@@ -204,7 +205,7 @@ sensor:
       - multiply: 0.001
 
   - platform: wifi_signal
-    name: "4.0 WiFi Signal Stärke"
+    name: "1.6 WiFi Signal Stärke"
     update_interval: 3s
     filters:
       - median:
@@ -224,37 +225,7 @@ sensor:
 
 number:
   - platform: template
-    name: "5.4.1 Energie Jahr Beginn"
-    id: energy_year_begin
-    mode: box
-    optimistic: true
-    step: 1
-    min_value: 1970
-    max_value: 3000 # very optimistic :-)
-    restore_value: true
-    update_interval: never
-  - platform: template
-    name: "5.4.2 Energie Monat Beginn"
-    id: energy_month_begin
-    mode: box
-    optimistic: true
-    step: 1
-    min_value: 1
-    max_value: 12
-    restore_value: true
-    update_interval: never
-  - platform: template
-    name: "5.4.3 Energie Tag Beginn"
-    id: energy_day_begin
-    mode: box
-    optimistic: true
-    step: 1
-    min_value: 1
-    max_value: 31
-    restore_value: true
-    update_interval: never
-  - platform: template
-    name: "5.5 Energie Bezug Beginn in kWh"
+    name: "4.1 Bezug in kWh"
     id: energy_plus_begin
     mode: box
     optimistic: true
@@ -264,7 +235,7 @@ number:
     restore_value: true
     update_interval: never
   - platform: template
-    name: "5.6 Energie Einspeisung Beginn in kWh"
+    name: "4.2 Einspeisung in kWh"
     id: energy_minus_begin
     mode: box
     optimistic: true
@@ -273,28 +244,62 @@ number:
     max_value: 1000000000
     restore_value: true
     update_interval: never
+  - platform: template
+    name: "4.3 Jahr"
+    id: energy_year_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1970
+    max_value: 3000 # very optimistic :-)
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "4.4 Monat"
+    id: energy_month_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1
+    max_value: 12
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "4.5 Tag"
+    id: energy_day_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1
+    max_value: 31
+    restore_value: true
+    update_interval: never
 
 text_sensor:
   - platform: template
-    name: 5.0 Energie Interval Dauer
-    id: energy_interval_duration
-    update_interval: never
-  - platform: template
-    name: 5.1 Energie Interval Summe
+    name: 1.2 Energie-Interval Summe
     id: energy_interval_sum
     update_interval: never
   - platform: template
-    name: 5.2 Energie Interval Bezug
+    name: 1.3 Energie-Interval Bezug
     id: energy_interval_plus
     update_interval: never
   - platform: template
-    name: 5.3 Energie Interval Einspeisung
+    name: 1.4 Energie-Interval Einspeisung
     id: energy_interval_minus
+    update_interval: never
+  - platform: template
+    name: 1.5 Energie-Interval Dauer
+    id: energy_interval_duration
+    update_interval: never
+  - platform: template
+    name: 4.0 Energie-Interval Beginn Settings
+    id: energy_interval_settings
     update_interval: never
 
 button:
   - platform: restart
-    name: "6.0 Reboot"
+    name: "5.0 Reboot"
 
 time:
   - platform: sntp
