@@ -26,7 +26,6 @@ public:
         , m_dlmsMeter(uartMbus)
         , m_meterModel(SMART_METER_ADDRESS)
     {
-        m_lastEnergyTime.timestamp = 0;
         m_modbusServer.set_uart_parent(uartModbus);
         // None GUI sensor, just to get access from yaml if needed.
         set_internal(true);
@@ -148,28 +147,11 @@ public:
         return response;
     }
 
-    void ResetEnergyFlow()
-    {
-        auto now = id(sntp_time).now();
-        if (!now.is_valid())
-        {
-            return;
-        }
-        m_lastEnergyTime = now;
-        m_lastEnergyPlus = id(active_energy_plus).state;
-        m_lastEnergyMinus = id(active_energy_minus).state;
-        SetEnergyFlow();
-        ESP_LOGI("sm", "Reset energy flow at %s", now.strftime("%y-%m-%d %H:%M:%S").c_str());
-    }
-
 private:
     ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
     MeterModel m_meterModel;
     uint32_t m_statusLedBlinkCount{0};
-    float m_lastEnergyPlus{0.0f};
-    float m_lastEnergyMinus{0.0f};
-    time::ESPTime m_lastEnergyTime;
 
     void SetStatusLed(bool on, bool error = false)
     {
@@ -203,24 +185,55 @@ private:
 
     void SetEnergyFlow()
     {
+        // Must be set
+        const float preventCastError = 0.5f;
+        // Duration in format yyyymmdd (e.g. 20240313 => 13. March 2024)
+        time::ESPTime begin;
+        std::memset(&begin, 0, sizeof(begin));
+        begin.day_of_month = static_cast<uint32_t>(id(energy_day_begin).state + preventCastError);
+        ;
+        begin.month = static_cast<uint32_t>(id(energy_month_begin).state + preventCastError);
+        ;
+        begin.year = static_cast<uint32_t>(id(energy_year_begin).state + preventCastError);
         auto now = id(sntp_time).now();
-        if (!now.is_valid() || m_lastEnergyTime.timestamp == 0)
+        if (begin.year != 1970U && now.is_valid())
         {
-            id(energy_flow).publish_state("-- : --");
-            return;
-        }
-        auto durationSec = now.timestamp - m_lastEnergyTime.timestamp;
-        auto energyFlow
-            = ((id(active_energy_plus).state - m_lastEnergyPlus) - (id(active_energy_minus).state - m_lastEnergyMinus))
-            * 1000.0f;
+            // make fields_in_range() happy, otherwise recalc_timestamp_utc() fails
+            const uint8_t doesNotMatter = 1;
+            begin.day_of_week = doesNotMatter;
+            begin.day_of_year = doesNotMatter;
+            begin.recalc_timestamp_utc(false);
+            long int durationSec = now.timestamp - begin.timestamp;
+            const int secPerHour = 3600;
+            const int secPerDay = secPerHour * 24;
+            const int days = durationSec / secPerDay;
+            const float hours = static_cast<float>(durationSec % secPerDay) / static_cast<float>(secPerHour);
+            char temp[64] = {0};
+            sprintf(temp, "%dd %.2fh", days, hours);
+            id(energy_interval_duration).publish_state(temp);
 
-        const auto secPerHour = 3600.0f;
-        const auto secPerDay = secPerHour * 24.0f;
-        const uint32_t days = durationSec / secPerDay;
-        const float hours = (durationSec - days * secPerDay) / secPerHour;
-        char temp[64] = {0};
-        sprintf(temp, "%dd %.2fh : %.0fWh", days, hours, energyFlow);
-        id(energy_flow).publish_state(temp);
+            // Plus
+            const auto plus = id(active_energy_plus).state - id(energy_plus_begin).state;
+            sprintf(temp, "%.3fkWh", plus);
+            id(energy_interval_plus).publish_state(temp);
+
+            // Minus
+            const auto minus = id(active_energy_minus).state - id(energy_minus_begin).state;
+            sprintf(temp, "%.3fkWh", minus);
+            id(energy_interval_minus).publish_state(temp);
+
+            // Sum
+            sprintf(temp, "%.3fkWh", plus - minus);
+            id(energy_interval_sum).publish_state(temp);
+        }
+        else
+        {
+            const char invalid[] = {"--"};
+            id(energy_interval_duration).publish_state(invalid);
+            id(energy_interval_plus).publish_state(invalid);
+            id(energy_interval_minus).publish_state(invalid);
+            id(energy_interval_sum).publish_state(invalid);
+        }
     }
 };
 

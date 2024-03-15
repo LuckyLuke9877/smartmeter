@@ -24,7 +24,7 @@ esp32:
     type: arduino
 
 preferences:
-  flash_write_interval: 28d
+  flash_write_interval: 7d # to write the energy_interval values
 
 # Enable logging
 logger:
@@ -222,23 +222,79 @@ sensor:
       App.register_component(sm);
       return sm->GetSensors();
 
+number:
+  - platform: template
+    name: "5.4.1 Energie Jahr Beginn"
+    id: energy_year_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1970
+    max_value: 3000 # very optimistic :-)
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "5.4.2 Energie Monat Beginn"
+    id: energy_month_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1
+    max_value: 12
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "5.4.3 Energie Tag Beginn"
+    id: energy_day_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1
+    max_value: 31
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "5.5 Energie Bezug Beginn in kWh"
+    id: energy_plus_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 0
+    max_value: 1000000000
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "5.6 Energie Einspeisung Beginn in kWh"
+    id: energy_minus_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 0
+    max_value: 1000000000
+    restore_value: true
+    update_interval: never
+
 text_sensor:
   - platform: template
-    name: 5.0 Energiefluss
-    id: energy_flow
+    name: 5.0 Energie Interval Dauer
+    id: energy_interval_duration
+    update_interval: never
+  - platform: template
+    name: 5.1 Energie Interval Summe
+    id: energy_interval_sum
+    update_interval: never
+  - platform: template
+    name: 5.2 Energie Interval Bezug
+    id: energy_interval_plus
+    update_interval: never
+  - platform: template
+    name: 5.3 Energie Interval Einspeisung
+    id: energy_interval_minus
     update_interval: never
 
 button:
   - platform: restart
     name: "6.0 Reboot"
-
-  - platform: template
-    name: "5.1 Reset Energiefluss"
-    id: reset_energy_flow
-    on_press:
-      then:
-        - lambda: |-
-            static_cast<sm::SmartMeter*>(id(smart_meter))->ResetEnergyFlow();
 
 time:
   - platform: sntp
