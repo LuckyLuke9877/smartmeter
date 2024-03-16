@@ -1,0 +1,307 @@
+esphome:
+  name: smartmeter
+  friendly_name: Smart-Meter
+  includes:
+    - ./esphome-dlms-meter
+    - sunspec_meter_model.h
+    - modbus_server.h
+    - smart_meter.h
+  on_boot:
+    # Init digital outputs at a early stage
+    priority: 400
+    then:
+      - lambda: |-
+          // Enable 5V output voltage, otherwise 1.7V at MAX 13487E
+          id(cgq5VPower_en).turn_on();
+          // # MAX 13487E - endable AutoDirection circuit
+          id(rs485_en).turn_on();
+          // # MAX 13487E - disable shutdown
+          id(rs485_se).turn_on();
+          ESP_LOGI("sm", "RS485 initialized.");
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+preferences:
+  flash_write_interval: 7d # to write the energy_interval values
+
+# Enable logging
+logger:
+  level: INFO
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  # 192.168.4.1
+  ap:
+    ssid: "Smart-Meter Fallback Hotspot"
+    password: !secret ap_password
+
+captive_portal:
+    
+web_server:
+  port: 80
+
+uart:
+  - id: uart_modbus
+    tx_pin: 22
+    rx_pin: 21
+    baud_rate: 9600
+    stop_bits: 1
+    rx_buffer_size: 1024
+  - id: mbus
+    tx_pin: 5  # or ( it doesn't send anything )
+    rx_pin: 18 # ge
+    baud_rate: 2400
+    stop_bits: 1
+    rx_buffer_size: 1024 # Needed to receive the large packets send by the smart meter
+    # mbus board wiring:
+    # GND => Esp.GND
+    # 3.3V => Esp.VDD
+    # RX => Esp.tx_pin(5)
+    # TX => Esp.rx_pin(18)
+    # MBUS1 => Kaifa.RJ11.3
+    # MBUS2 => Kaifa.RJ11.4
+
+output:
+# to enable RS485 chip and 5V power
+  - platform: gpio
+    pin: 16
+    id: cgq5VPower_en
+  - platform: gpio
+    pin: 17
+    id: rs485_en
+  - platform: gpio
+    pin: 19
+    id: rs485_se
+
+light:
+  - platform: neopixelbus
+    name: "NeoPixel Led"
+    id: status_led
+    internal: true
+    type: GRB
+    variant: WS2812
+    pin: 04
+    num_leds: 1
+    default_transition_length: 0s
+
+sensor:
+  - platform: template
+    id: voltage_l1
+    name: 2.0 Spannung L1
+    unit_of_measurement: V
+    accuracy_decimals: 1
+    device_class: "voltage"
+    state_class: "measurement"
+  - platform: template
+    id: voltage_l2
+    name: 2.1 Spannung L2
+    unit_of_measurement: V
+    accuracy_decimals: 1
+    device_class: "voltage"
+    state_class: "measurement"
+  - platform: template
+    id: voltage_l3
+    name: 2.2 Spannung L3
+    unit_of_measurement: V
+    accuracy_decimals: 1
+    device_class: "voltage"
+    state_class: "measurement"
+
+  - platform: template
+    id: current_l1
+    name: 2.3 Strom L1
+    unit_of_measurement: A
+    accuracy_decimals: 2
+    device_class: "current"
+    state_class: "measurement"
+  - platform: template
+    id: current_l2
+    name: 2.4 Strom L2
+    unit_of_measurement: A
+    accuracy_decimals: 2
+    device_class: "current"
+    state_class: "measurement"
+  - platform: template
+    id: current_l3
+    name: 2.5 Strom L3
+    unit_of_measurement: A
+    accuracy_decimals: 2
+    device_class: "current"
+    state_class: "measurement"
+
+  - platform: template
+    id: active_power_plus
+    name: 1.0 Momentan Leistung Bezug
+    unit_of_measurement: W
+    accuracy_decimals: 0
+    device_class: "power"
+    state_class: "measurement"
+  - platform: template
+    id: active_power_minus
+    name: 1.1 Momentan Leistung Einspeisung
+    unit_of_measurement: W
+    accuracy_decimals: 0
+    device_class: "power"
+    state_class: "measurement"
+  - platform: template
+    id: apparent_power
+    name: 2.6 Momentan Scheinleistung
+    unit_of_measurement: VA
+    accuracy_decimals: 0
+    device_class: "power"
+    state_class: "measurement"
+  - platform: template
+    id: power_factor
+    name: 2.7 cos-phi
+    accuracy_decimals: 3
+    device_class: "power"
+    state_class: "measurement"
+
+  - platform: template
+    id: active_energy_plus
+    name: 3.0 Gesamt Energie Bezug
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "total_increasing"
+    filters:
+      - multiply: 0.001
+  - platform: template
+    id: active_energy_minus
+    name: 3.1 Gesamt Energie Einspeisung
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "total_increasing"
+    filters:
+      - multiply: 0.001
+
+  - platform: template
+    id: reactive_energy_plus
+    name: 3.2 Gesamt Blindenergie Plus
+    unit_of_measurement: kvarh
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "total_increasing"
+    filters:
+      - multiply: 0.001
+  - platform: template
+    id: reactive_energy_minus
+    name: 3.3 Gesamt Blindenergie Minus
+    unit_of_measurement: kvarh
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "total_increasing"
+    filters:
+      - multiply: 0.001
+
+  - platform: wifi_signal
+    name: "1.6 WiFi Signal Stärke"
+    update_interval: 3s
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+          send_first_at: 1
+
+  - platform: custom
+    sensors:
+    - name: "SmartMeter"
+      id: smart_meter
+      internal: true # not visible in UI
+    lambda: |-
+      auto sm = new sm::SmartMeter(id(uart_modbus), id(mbus));
+      App.register_component(sm);
+      return sm->GetSensors();
+
+number:
+  - platform: template
+    name: "4.1 Bezug in kWh"
+    id: energy_plus_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 0
+    max_value: 1000000000
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "4.2 Einspeisung in kWh"
+    id: energy_minus_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 0
+    max_value: 1000000000
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "4.3 Jahr"
+    id: energy_year_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1970
+    max_value: 3000 # very optimistic :-)
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "4.4 Monat"
+    id: energy_month_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1
+    max_value: 12
+    restore_value: true
+    update_interval: never
+  - platform: template
+    name: "4.5 Tag"
+    id: energy_day_begin
+    mode: box
+    optimistic: true
+    step: 1
+    min_value: 1
+    max_value: 31
+    restore_value: true
+    update_interval: never
+
+text_sensor:
+  - platform: template
+    name: 1.2 Energie-Interval Summe
+    id: energy_interval_sum
+    update_interval: never
+  - platform: template
+    name: 1.3 Energie-Interval Bezug
+    id: energy_interval_plus
+    update_interval: never
+  - platform: template
+    name: 1.4 Energie-Interval Einspeisung
+    id: energy_interval_minus
+    update_interval: never
+  - platform: template
+    name: 1.5 Energie-Interval Dauer
+    id: energy_interval_duration
+    update_interval: never
+  - platform: template
+    name: 4.0 Energie-Interval Beginn Settings
+    id: energy_interval_settings
+    update_interval: never
+
+button:
+  - platform: restart
+    name: "5.0 Reboot"
+
+time:
+  - platform: sntp
+    id: sntp_time
+       
