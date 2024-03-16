@@ -10,6 +10,7 @@ Thanks a lot for the good work.
 # Tested with
 - Fronius Gen24 inverter: config => "Kommunikation/Modbus RTU" as "Master"; add "Komponente/Primärzähler"
 - Kaifa MA309 on VKW ( Vorarlberg Netz ). Note: Needs security key from energy provider.
+- Note: MQTT was not used and never tested
 
 # HW
 - [esp32 Lilygo RS485 / CAN](https://github.com/Xinyuan-LilyGO/T-CAN485/tree/main). CAN-bus is not needed.
@@ -31,3 +32,6 @@ Thanks a lot for the good work.
 - optional build / run the tests in "test" folder
   - smart_meter_client: used to test the Modbus - server communication with an other Lilygo board running a Modbus - client
   - GTest: for Sunspec model and Modbus - server
+
+# Known issues
+- "cos-phi" is low on low energy flows

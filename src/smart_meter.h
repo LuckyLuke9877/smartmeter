@@ -5,6 +5,8 @@
 #include "sunspec_meter_model.h"
 #include "./esphome-dlms-meter/espdm.h"
 
+#define SMART_METER_VERSION "1.0.0"
+
 namespace esphome
 {
 namespace sm
@@ -56,7 +58,7 @@ public:
 
     void setup() override
     {
-        ESP_LOGD("sm", "setup() called");
+        ESP_LOGI("sm", "Smart-Meter starting, version = %s", SMART_METER_VERSION);
         m_dlmsMeter.setup();
     }
 
@@ -185,15 +187,11 @@ private:
 
     void SetEnergyFlow()
     {
-        // Must be set
         const float preventCastError = 0.5f;
-        // Duration in format yyyymmdd (e.g. 20240313 => 13. March 2024)
         time::ESPTime begin;
         std::memset(&begin, 0, sizeof(begin));
         begin.day_of_month = static_cast<uint32_t>(id(energy_day_begin).state + preventCastError);
-        ;
         begin.month = static_cast<uint32_t>(id(energy_month_begin).state + preventCastError);
-        ;
         begin.year = static_cast<uint32_t>(id(energy_year_begin).state + preventCastError);
         auto now = id(sntp_time).now();
         if (begin.year != 1970U && now.is_valid())
@@ -203,6 +201,7 @@ private:
             begin.day_of_week = doesNotMatter;
             begin.day_of_year = doesNotMatter;
             begin.recalc_timestamp_utc(false);
+            now.recalc_timestamp_utc(false);
             long int durationSec = now.timestamp - begin.timestamp;
             const int secPerHour = 3600;
             const int secPerDay = secPerHour * 24;

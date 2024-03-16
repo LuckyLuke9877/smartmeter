@@ -488,6 +488,7 @@ uint32_t DlmsMeter::swap_uint32(uint32_t val)
 
 void DlmsMeter::set_key(uint8_t key[], size_t keyLength)
 {
+    // Important: Ensure no more than 16bytes.
     memcpy(&this->key[0], &key[0], keyLength);
     this->keyLength = keyLength;
 }
