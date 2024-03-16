@@ -5,6 +5,8 @@
 #include "sunspec_meter_model.h"
 #include "./esphome-dlms-meter/espdm.h"
 
+#define SMART_METER_VERSION "1.0.0"
+
 namespace esphome
 {
 namespace sm
@@ -56,7 +58,7 @@ public:
 
     void setup() override
     {
-        ESP_LOGD("sm", "setup() called");
+        ESP_LOGI("sm", "Smart-Meter starting, version = %s", SMART_METER_VERSION);
         m_dlmsMeter.setup();
     }
 
@@ -117,6 +119,7 @@ public:
         data.GetReactivePower(total, value1, value2, value3);
         m_meterModel.SetReactivePower(total, value1, value2, value3);
 
+        SetEnergyFlow();
         ESP_LOGD("sm", "MeterModel data updated");
     }
 
@@ -147,7 +150,6 @@ public:
     }
 
 private:
-    // sensor::Sensor m_sensor;
     ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
     MeterModel m_meterModel;
@@ -181,6 +183,56 @@ private:
         }
         call.perform();
         m_statusLedBlinkCount = 1;
+    }
+
+    void SetEnergyFlow()
+    {
+        const float preventCastError = 0.5f;
+        time::ESPTime begin;
+        std::memset(&begin, 0, sizeof(begin));
+        begin.day_of_month = static_cast<uint32_t>(id(energy_day_begin).state + preventCastError);
+        begin.month = static_cast<uint32_t>(id(energy_month_begin).state + preventCastError);
+        begin.year = static_cast<uint32_t>(id(energy_year_begin).state + preventCastError);
+        auto now = id(sntp_time).now();
+        if (begin.year != 1970U && now.is_valid())
+        {
+            // make fields_in_range() happy, otherwise recalc_timestamp_utc() fails
+            const uint8_t doesNotMatter = 1;
+            begin.day_of_week = doesNotMatter;
+            begin.day_of_year = doesNotMatter;
+            begin.recalc_timestamp_utc(false);
+            now.recalc_timestamp_utc(false);
+            long int durationSec = now.timestamp - begin.timestamp;
+            const int secPerHour = 3600;
+            const int secPerDay = secPerHour * 24;
+            const int days = durationSec / secPerDay;
+            const float hours = static_cast<float>(durationSec % secPerDay) / static_cast<float>(secPerHour);
+            char temp[64] = {0};
+            sprintf(temp, "%dd %.2fh", days, hours);
+            id(energy_interval_duration).publish_state(temp);
+
+            // Plus
+            const auto plus = id(active_energy_plus).state - id(energy_plus_begin).state;
+            sprintf(temp, "%.3fkWh", plus);
+            id(energy_interval_plus).publish_state(temp);
+
+            // Minus
+            const auto minus = id(active_energy_minus).state - id(energy_minus_begin).state;
+            sprintf(temp, "%.3fkWh", minus);
+            id(energy_interval_minus).publish_state(temp);
+
+            // Sum
+            sprintf(temp, "%.3fkWh", plus - minus);
+            id(energy_interval_sum).publish_state(temp);
+        }
+        else
+        {
+            const char invalid[] = {"--"};
+            id(energy_interval_duration).publish_state(invalid);
+            id(energy_interval_plus).publish_state(invalid);
+            id(energy_interval_minus).publish_state(invalid);
+            id(energy_interval_sum).publish_state(invalid);
+        }
     }
 };
 
