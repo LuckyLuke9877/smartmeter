@@ -296,6 +296,10 @@ text_sensor:
     name: 4.0 Energie-Interval Beginn Settings
     id: energy_interval_settings
     update_interval: never
+  - platform: template
+    name: 1.7 Gerätelaufzeit
+    id: device_uptime
+    update_interval: never
 
 button:
   - platform: restart

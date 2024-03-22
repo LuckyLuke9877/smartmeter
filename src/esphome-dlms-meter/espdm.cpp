@@ -5,6 +5,12 @@
     #include <bearssl/bearssl.h>
 #endif
 
+namespace
+{
+const char ESPDM_VERSION[] = {"0.9.1"};
+const char TAG[] = {"espdm"};
+} // namespace
+
 namespace esphome
 {
 
@@ -125,23 +131,23 @@ void DlmsMeter::loop()
         memcpy(&iv[8], &m_dlmsData[headerOffset + DLMS_FRAMECOUNTER_OFFSET],
                DLMS_FRAMECOUNTER_LENGTH); // Copy frame counter to IV
 
-        uint8_t plaintext[messageLength];
+        std::vector<uint8_t> plaintext(messageLength);
 
 #if defined(ESP8266)
-        memcpy(plaintext, &m_dlmsData[headerOffset + DLMS_PAYLOAD_OFFSET], messageLength);
+        memcpy(&plaintext[0], &m_dlmsData[headerOffset + DLMS_PAYLOAD_OFFSET], messageLength);
         br_gcm_context gcmCtx;
         br_aes_ct_ctr_keys bc;
         br_aes_ct_ctr_init(&bc, this->key, this->keyLength);
         br_gcm_init(&gcmCtx, &bc.vtable, br_ghash_ctmul32);
         br_gcm_reset(&gcmCtx, iv, sizeof(iv));
         br_gcm_flip(&gcmCtx);
-        br_gcm_run(&gcmCtx, 0, plaintext, messageLength);
+        br_gcm_run(&gcmCtx, 0, &plaintext[0], messageLength);
 #elif defined(ESP32)
         mbedtls_gcm_init(&this->aes);
         mbedtls_gcm_setkey(&this->aes, MBEDTLS_CIPHER_ID_AES, this->key, this->keyLength * 8);
 
         mbedtls_gcm_auth_decrypt(&this->aes, messageLength, iv, sizeof(iv), NULL, 0, NULL, 0,
-                                 &m_dlmsData[headerOffset + DLMS_PAYLOAD_OFFSET], plaintext);
+                                 &m_dlmsData[headerOffset + DLMS_PAYLOAD_OFFSET], &plaintext[0]);
 
         mbedtls_gcm_free(&this->aes);
 #else
@@ -408,7 +414,7 @@ void DlmsMeter::loop()
 #if defined(USE_MQTT)
         if (this->mqtt_client != NULL)
         {
-            this->mqtt_client->publish_json(this->topic, [=](JsonObject root) {
+            this->mqtt_client->publish_json(this->topic.c_str(), [=](JsonObject root) {
                 if (this->voltage_l1 != NULL)
                 {
                     root["voltage_l1"] = this->voltage_l1->state;
