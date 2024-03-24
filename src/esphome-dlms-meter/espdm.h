@@ -8,9 +8,6 @@
 
 #include <math.h>
 
-static const char* ESPDM_VERSION = "0.9.1";
-static const char* TAG = "espdm";
-
 namespace esphome
 {
 namespace espdm
@@ -125,8 +122,6 @@ private:
     uint8_t key[16]; // Stores the decryption key
     size_t keyLength; // Stores the decryption key length (usually 16 bytes)
 
-    const char* topic; // Stores the MQTT topic
-
 #if defined(ESP32)
     mbedtls_gcm_context aes; // AES context used for decryption
 #endif
@@ -152,6 +147,7 @@ private:
     text_sensor::TextSensor* timestamp = NULL; // Text sensor for the timestamp value
 
     mqtt::MQTTClientComponent* mqtt_client = NULL;
+    std::string topic; // Stores the MQTT topic
 #endif
     OnReceiveMeterData m_onReceiveMeterData{nullptr};
 

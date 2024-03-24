@@ -6,6 +6,10 @@
 #include "./esphome-dlms-meter/espdm.h"
 
 #define SMART_METER_VERSION "1.0.0"
+// first release
+
+// #define SMART_METER_VERSION "1.0.1"
+// update esphome to version 24.03
 
 namespace esphome
 {
@@ -28,6 +32,7 @@ public:
         , m_dlmsMeter(uartMbus)
         , m_meterModel(SMART_METER_ADDRESS)
     {
+        std::memset(&m_uptimeStart, 0, sizeof(m_uptimeStart));
         m_modbusServer.set_uart_parent(uartModbus);
         // None GUI sensor, just to get access from yaml if needed.
         set_internal(true);
@@ -120,6 +125,7 @@ public:
         m_meterModel.SetReactivePower(total, value1, value2, value3);
 
         SetEnergyFlow();
+        SetUptime();
         ESP_LOGD("sm", "MeterModel data updated");
     }
 
@@ -153,6 +159,7 @@ private:
     ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
     MeterModel m_meterModel;
+    ESPTime m_uptimeStart;
     uint32_t m_statusLedBlinkCount{0};
 
     void SetStatusLed(bool on, bool error = false)
@@ -188,7 +195,7 @@ private:
     void SetEnergyFlow()
     {
         const float preventCastError = 0.5f;
-        time::ESPTime begin;
+        ESPTime begin;
         std::memset(&begin, 0, sizeof(begin));
         begin.day_of_month = static_cast<uint32_t>(id(energy_day_begin).state + preventCastError);
         begin.month = static_cast<uint32_t>(id(energy_month_begin).state + preventCastError);
@@ -202,16 +209,10 @@ private:
             begin.day_of_year = doesNotMatter;
             begin.recalc_timestamp_utc(false);
             now.recalc_timestamp_utc(false);
-            long int durationSec = now.timestamp - begin.timestamp;
-            const int secPerHour = 3600;
-            const int secPerDay = secPerHour * 24;
-            const int days = durationSec / secPerDay;
-            const float hours = static_cast<float>(durationSec % secPerDay) / static_cast<float>(secPerHour);
-            char temp[64] = {0};
-            sprintf(temp, "%dd %.2fh", days, hours);
-            id(energy_interval_duration).publish_state(temp);
+            id(energy_interval_duration).publish_state(GetTimespanString(now.timestamp - begin.timestamp));
 
             // Plus
+            char temp[64] = {0};
             const auto plus = id(active_energy_plus).state - id(energy_plus_begin).state;
             sprintf(temp, "%.3fkWh", plus);
             id(energy_interval_plus).publish_state(temp);
@@ -233,6 +234,39 @@ private:
             id(energy_interval_minus).publish_state(invalid);
             id(energy_interval_sum).publish_state(invalid);
         }
+    }
+
+    std::string GetTimespanString(long int timespan)
+    {
+        const int secPerMinute = 60;
+        const int secPerHour = secPerMinute * 60;
+        const int secPerDay = secPerHour * 24;
+        const int days = timespan / secPerDay;
+        timespan -= days * secPerDay;
+        const int hours = timespan / secPerHour;
+        timespan -= hours * secPerHour;
+        const int minutes = timespan / secPerMinute;
+        timespan -= minutes * secPerMinute;
+        char temp[64] = {0};
+        sprintf(temp, "%dd %02d:%02d:%02d", days, hours, minutes, timespan);
+
+        return temp;
+    }
+
+    void SetUptime()
+    {
+        auto utcnow = id(sntp_time).utcnow();
+        if (utcnow.is_valid())
+        {
+            utcnow.recalc_timestamp_utc(false);
+            if (m_uptimeStart.timestamp != 0)
+            {
+                id(device_uptime).publish_state(GetTimespanString(utcnow.timestamp - m_uptimeStart.timestamp));
+                return;
+            }
+            m_uptimeStart = utcnow;
+        }
+        id(device_uptime).publish_state("-");
     }
 };
 
