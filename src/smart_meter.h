@@ -261,8 +261,17 @@ private:
             utcnow.recalc_timestamp_utc(false);
             if (m_uptimeStart.timestamp != 0)
             {
-                id(device_uptime).publish_state(GetTimespanString(utcnow.timestamp - m_uptimeStart.timestamp));
-                return;
+                const long int elapsedTime = utcnow.timestamp - m_uptimeStart.timestamp;
+                if (elapsedTime < 0)
+                {
+                    // Sometimes seen strange values...
+                    ESP_LOGI("sm", "elapsedTime is negative : %d", elapsedTime);
+                }
+                else
+                {
+                    id(device_uptime).publish_state(GetTimespanString(elapsedTime));
+                    return;
+                }
             }
             m_uptimeStart = utcnow;
         }
