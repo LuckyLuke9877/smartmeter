@@ -6,6 +6,10 @@
 #include "./esphome-dlms-meter/espdm.h"
 
 #define SMART_METER_VERSION "1.0.0"
+// first release
+
+// #define SMART_METER_VERSION "1.0.1"
+// update esphome to version 24.03
 
 namespace esphome
 {
@@ -155,7 +159,7 @@ private:
     ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
     MeterModel m_meterModel;
-    time::ESPTime m_uptimeStart;
+    ESPTime m_uptimeStart;
     uint32_t m_statusLedBlinkCount{0};
 
     void SetStatusLed(bool on, bool error = false)
@@ -191,7 +195,7 @@ private:
     void SetEnergyFlow()
     {
         const float preventCastError = 0.5f;
-        time::ESPTime begin;
+        ESPTime begin;
         std::memset(&begin, 0, sizeof(begin));
         begin.day_of_month = static_cast<uint32_t>(id(energy_day_begin).state + preventCastError);
         begin.month = static_cast<uint32_t>(id(energy_month_begin).state + preventCastError);

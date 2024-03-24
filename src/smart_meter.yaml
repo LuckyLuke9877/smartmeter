@@ -30,6 +30,10 @@ preferences:
 # Enable logging
 logger:
   level: INFO
+  logs:
+    # prevent these logs: "Component <unknown> took a long time for an operation (137 ms)"
+    # this is normal, as the Fronius inverter requests ~130 bytes at 9600 baud
+    component: ERROR
 
 ota:
   password: !secret ota_password
