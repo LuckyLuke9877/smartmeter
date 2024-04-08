@@ -1,15 +1,10 @@
 #pragma once
 
+#include "Utils.h"
 #include "esphome.h"
 #include "modbus_server.h"
 #include "sunspec_meter_model.h"
 #include "./esphome-dlms-meter/espdm.h"
-
-#define SMART_METER_VERSION "1.0.0"
-// first release
-
-// #define SMART_METER_VERSION "1.0.1"
-// update esphome to version 24.03
 
 namespace esphome
 {
@@ -32,7 +27,6 @@ public:
         , m_dlmsMeter(uartMbus)
         , m_meterModel(SMART_METER_ADDRESS)
     {
-        std::memset(&m_uptimeStart, 0, sizeof(m_uptimeStart));
         m_modbusServer.set_uart_parent(uartModbus);
         // None GUI sensor, just to get access from yaml if needed.
         set_internal(true);
@@ -63,7 +57,6 @@ public:
 
     void setup() override
     {
-        ESP_LOGI("sm", "Smart-Meter starting, version = %s", SMART_METER_VERSION);
         m_dlmsMeter.setup();
     }
 
@@ -125,7 +118,7 @@ public:
         m_meterModel.SetReactivePower(total, value1, value2, value3);
 
         SetEnergyFlow();
-        SetUptime();
+        SetEspStatus();
         ESP_LOGD("sm", "MeterModel data updated");
     }
 
@@ -159,7 +152,7 @@ private:
     ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
     MeterModel m_meterModel;
-    ESPTime m_uptimeStart;
+    utils::Stopwatch m_uptime;
     uint32_t m_statusLedBlinkCount{0};
 
     void SetStatusLed(bool on, bool error = false)
@@ -253,29 +246,10 @@ private:
         return temp;
     }
 
-    void SetUptime()
+    void SetEspStatus()
     {
-        auto utcnow = id(sntp_time).utcnow();
-        if (utcnow.is_valid())
-        {
-            utcnow.recalc_timestamp_utc(false);
-            if (m_uptimeStart.timestamp != 0)
-            {
-                const long int elapsedTime = utcnow.timestamp - m_uptimeStart.timestamp;
-                if (elapsedTime < 0)
-                {
-                    // Sometimes seen strange values...
-                    ESP_LOGI("sm", "elapsedTime is negative : %d", elapsedTime);
-                }
-                else
-                {
-                    id(device_uptime).publish_state(GetTimespanString(elapsedTime));
-                    return;
-                }
-            }
-            m_uptimeStart = utcnow;
-        }
-        id(device_uptime).publish_state("-");
+        id(device_uptime).publish_state(utils::GetTimespanString(m_uptime.GetElapsedMillis()));
+        id(free_memory).publish_state(std::to_string(heap_caps_get_free_size(MALLOC_CAP_8BIT)) + " byte");
     }
 };
 
