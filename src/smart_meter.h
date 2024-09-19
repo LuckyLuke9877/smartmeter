@@ -1,15 +1,10 @@
 #pragma once
 
+#include "Utils.h"
 #include "esphome.h"
 #include "modbus_server.h"
 #include "sunspec_meter_model.h"
 #include "./esphome-dlms-meter/espdm.h"
-
-#define SMART_METER_VERSION "1.0.0"
-// first release
-
-// #define SMART_METER_VERSION "1.0.1"
-// update esphome to version 24.03
 
 namespace esphome
 {
@@ -32,7 +27,16 @@ public:
         , m_dlmsMeter(uartMbus)
         , m_meterModel(SMART_METER_ADDRESS)
     {
-        std::memset(&m_uptimeStart, 0, sizeof(m_uptimeStart));
+        // test-hack
+        // const auto beginPlus = 16481.152f;
+        // const auto beginMinus = 3295.803f;
+        // const auto todayIdx = 3; // Mittwoch
+        // for (size_t i = 0; i < todayIdx; i++)
+        // {
+        //     m_energyDays[i].ReceivedKwh = beginPlus - (todayIdx - i) * 10;
+        //     m_energyDays[i].ProvidedKwh = beginMinus - (todayIdx - i) * 8;
+        // }
+        
         m_modbusServer.set_uart_parent(uartModbus);
         // None GUI sensor, just to get access from yaml if needed.
         set_internal(true);
@@ -63,7 +67,6 @@ public:
 
     void setup() override
     {
-        ESP_LOGI("sm", "Smart-Meter starting, version = %s", SMART_METER_VERSION);
         m_dlmsMeter.setup();
     }
 
@@ -125,7 +128,7 @@ public:
         m_meterModel.SetReactivePower(total, value1, value2, value3);
 
         SetEnergyFlow();
-        SetUptime();
+        SetEspStatus();
         ESP_LOGD("sm", "MeterModel data updated");
     }
 
@@ -155,12 +158,58 @@ public:
         return response;
     }
 
+    void ShowStatistics()
+    {
+        // Write last days to log window as esphome has no list control
+        auto now = id(sntp_time).now();
+        if (!now.is_valid())
+        {
+            ESP_LOGW("sm", "sntp_time is not valid.");
+            return;
+        }
+        // Electric energy usage: new(yesterday) to old, top to bottom
+        const int startIdx = now.day_of_week;
+        std::string weekValues;
+        for (int idx = startIdx; idx > startIdx - 6; idx--)
+        {
+            const auto energyDiff = m_energyDays[GetDayOfWeekIdx(idx)].GetDifference(m_energyDays[GetDayOfWeekIdx(idx - 1)]);
+            char temp[64] = { 0 };
+            sprintf(temp, "%7.3f|\n", energyDiff.ReceivedKwh - energyDiff.ProvidedKwh);
+
+            weekValues += energyDiff.ToString() + temp;
+        }
+        ESP_LOGI("Hp", "Energie: |Bezug|Einspeisung|Differenz| in KWH/Tag:\n%s", weekValues.c_str());
+    }
+
 private:
+    struct ElectricEnergy
+    {
+        float ReceivedKwh{0.0f};   // Bezug
+        float ProvidedKwh{0.0f};   // Einspeisung
+
+        ElectricEnergy GetDifference(const ElectricEnergy& other) const
+        {
+            ElectricEnergy diff;
+            diff.ReceivedKwh = ReceivedKwh != 0.0f && other.ReceivedKwh != 0.0f && ReceivedKwh > other.ReceivedKwh? 
+                                    ReceivedKwh - other.ReceivedKwh : 0.0f;
+            diff.ProvidedKwh = ProvidedKwh != 0.0f && other.ProvidedKwh != 0.0f && ProvidedKwh > other.ProvidedKwh? 
+                                    ProvidedKwh - other.ProvidedKwh : 0.0f;
+            return diff;
+        }
+        std::string ToString() const
+        {
+            char temp[64] = { 0 };
+            sprintf(temp, "|%7.3f|%7.3f|", ReceivedKwh, ProvidedKwh);
+            return temp;
+        }
+    };
+
     ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
     MeterModel m_meterModel;
-    ESPTime m_uptimeStart;
+    utils::Stopwatch m_uptime;
     uint32_t m_statusLedBlinkCount{0};
+    std::array<ElectricEnergy, 7> m_energyDays;
 
     void SetStatusLed(bool on, bool error = false)
     {
@@ -200,40 +249,46 @@ private:
         begin.day_of_month = static_cast<uint32_t>(id(energy_day_begin).state + preventCastError);
         begin.month = static_cast<uint32_t>(id(energy_month_begin).state + preventCastError);
         begin.year = static_cast<uint32_t>(id(energy_year_begin).state + preventCastError);
+        std::string duration{"--"};
+        char plus[32] = {"--"};
+        char minus[32] = {"--"};
+        char sum[32] = {"--"};
         auto now = id(sntp_time).now();
-        if (begin.year != 1970U && now.is_valid())
+        if (now.is_valid())
         {
-            // make fields_in_range() happy, otherwise recalc_timestamp_utc() fails
-            const uint8_t doesNotMatter = 1;
-            begin.day_of_week = doesNotMatter;
-            begin.day_of_year = doesNotMatter;
-            begin.recalc_timestamp_utc(false);
-            now.recalc_timestamp_utc(false);
-            id(energy_interval_duration).publish_state(GetTimespanString(now.timestamp - begin.timestamp));
+            // update statistics
+            auto& todayEnergy = m_energyDays[GetDayOfWeekIdx(now.day_of_week)];
+            todayEnergy.ReceivedKwh = id(active_energy_plus).state;
+            todayEnergy.ProvidedKwh = id(active_energy_minus).state;
 
-            // Plus
-            char temp[64] = {0};
-            const auto plus = id(active_energy_plus).state - id(energy_plus_begin).state;
-            sprintf(temp, "%.3fkWh", plus);
-            id(energy_interval_plus).publish_state(temp);
+            if (begin.year != 1970U)
+            {
+                // make fields_in_range() happy, otherwise recalc_timestamp_utc() fails
+                const uint8_t doesNotMatter = 1;
+                begin.day_of_week = doesNotMatter;
+                begin.day_of_year = doesNotMatter;
+                begin.recalc_timestamp_utc(false);
+                now.recalc_timestamp_utc(false);
+                duration = GetTimespanString(now.timestamp - begin.timestamp);
 
-            // Minus
-            const auto minus = id(active_energy_minus).state - id(energy_minus_begin).state;
-            sprintf(temp, "%.3fkWh", minus);
-            id(energy_interval_minus).publish_state(temp);
+                // Plus
+                char temp[64] = {0};
+                const auto plus_diff = id(active_energy_plus).state - id(energy_plus_begin).state;
+                sprintf(plus, "%.3fkWh", plus_diff);
 
-            // Sum
-            sprintf(temp, "%.3fkWh", plus - minus);
-            id(energy_interval_sum).publish_state(temp);
+                // Minus
+                const auto minus_diff = id(active_energy_minus).state - id(energy_minus_begin).state;
+                sprintf(minus, "%.3fkWh", minus_diff);
+
+                // Sum
+                sprintf(sum, "%.3fkWh", plus_diff - minus_diff);
+            }
         }
-        else
-        {
-            const char invalid[] = {"--"};
-            id(energy_interval_duration).publish_state(invalid);
-            id(energy_interval_plus).publish_state(invalid);
-            id(energy_interval_minus).publish_state(invalid);
-            id(energy_interval_sum).publish_state(invalid);
-        }
+
+        id(energy_interval_duration).publish_state(duration);
+        id(energy_interval_plus).publish_state(plus);
+        id(energy_interval_minus).publish_state(minus);
+        id(energy_interval_sum).publish_state(sum);
     }
 
     std::string GetTimespanString(long int timespan)
@@ -253,29 +308,17 @@ private:
         return temp;
     }
 
-    void SetUptime()
+    void SetEspStatus()
     {
-        auto utcnow = id(sntp_time).utcnow();
-        if (utcnow.is_valid())
-        {
-            utcnow.recalc_timestamp_utc(false);
-            if (m_uptimeStart.timestamp != 0)
-            {
-                const long int elapsedTime = utcnow.timestamp - m_uptimeStart.timestamp;
-                if (elapsedTime < 0)
-                {
-                    // Sometimes seen strange values...
-                    ESP_LOGI("sm", "elapsedTime is negative : %d", elapsedTime);
-                }
-                else
-                {
-                    id(device_uptime).publish_state(GetTimespanString(elapsedTime));
-                    return;
-                }
-            }
-            m_uptimeStart = utcnow;
-        }
-        id(device_uptime).publish_state("-");
+        id(device_uptime).publish_state(utils::GetTimespanString(m_uptime.GetElapsedMillis()));
+        id(free_memory).publish_state(std::to_string(heap_caps_get_free_size(MALLOC_CAP_8BIT)) + " byte");
+    }
+
+    int GetDayOfWeekIdx(int dayOfWeek)
+    {
+        // Note: day_of_week range is 1 - 7, so move range to 0 - 6
+        dayOfWeek %= 7; // when negative
+        return (dayOfWeek - 1 + 7) % 7;
     }
 };
 

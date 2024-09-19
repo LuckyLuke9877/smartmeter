@@ -6,6 +6,8 @@ esphome:
     - sunspec_meter_model.h
     - modbus_server.h
     - smart_meter.h
+    - Utils.h
+
   on_boot:
     # Init digital outputs at a early stage
     priority: 400
@@ -41,9 +43,13 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  manual_ip:
+    static_ip: !secret sm_ip
+    gateway: !secret gateway
+    # define dns otherwise sntp_time doesn't work
+    dns1: !secret dns
+    subnet: 255.255.255.0
 
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
-  # 192.168.4.1
   ap:
     ssid: "Smart-Meter Fallback Hotspot"
     password: !secret ap_password
@@ -196,6 +202,7 @@ sensor:
     accuracy_decimals: 3
     device_class: "energy"
     state_class: "total_increasing"
+    internal: true # not visible in UI
     filters:
       - multiply: 0.001
   - platform: template
@@ -205,6 +212,7 @@ sensor:
     accuracy_decimals: 3
     device_class: "energy"
     state_class: "total_increasing"
+    internal: true # not visible in UI
     filters:
       - multiply: 0.001
 
@@ -301,15 +309,26 @@ text_sensor:
     id: energy_interval_settings
     update_interval: never
   - platform: template
-    name: 1.7 Gerätelaufzeit
+    name: 1.7 Gerätelaufzeit V24.09.18
     id: device_uptime
+    update_interval: never
+  - platform: template
+    name: "1.8 Free memory"
+    id: free_memory
     update_interval: never
 
 button:
   - platform: restart
     name: "5.0 Reboot"
+  - platform: template
+    name: "3.2 Zeige Energie/Tag"
+    id: show_statistics
+    on_press:
+      then:
+        - lambda: |-
+            static_cast<sm::SmartMeter*>(id(smart_meter))->ShowStatistics();
 
 time:
   - platform: sntp
     id: sntp_time
-       
+    timezone: Europe/Vienna
