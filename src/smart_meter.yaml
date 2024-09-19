@@ -46,6 +46,8 @@ wifi:
   manual_ip:
     static_ip: !secret sm_ip
     gateway: !secret gateway
+    # define dns otherwise sntp_time doesn't work
+    dns1: !secret dns
     subnet: 255.255.255.0
 
   ap:
@@ -307,7 +309,7 @@ text_sensor:
     id: energy_interval_settings
     update_interval: never
   - platform: template
-    name: 1.7 Gerätelaufzeit V24.03.08
+    name: 1.7 Gerätelaufzeit V24.09.18
     id: device_uptime
     update_interval: never
   - platform: template
@@ -318,8 +320,15 @@ text_sensor:
 button:
   - platform: restart
     name: "5.0 Reboot"
+  - platform: template
+    name: "3.2 Zeige Energie/Tag"
+    id: show_statistics
+    on_press:
+      then:
+        - lambda: |-
+            static_cast<sm::SmartMeter*>(id(smart_meter))->ShowStatistics();
 
 time:
   - platform: sntp
     id: sntp_time
-       
+    timezone: Europe/Vienna
