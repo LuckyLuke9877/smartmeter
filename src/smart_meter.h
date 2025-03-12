@@ -6,24 +6,24 @@
 #include "sunspec_meter_model.h"
 #include "./esphome-dlms-meter/espdm.h"
 
+using namespace modb;
+
 namespace esphome
 {
 namespace sm
 {
-using namespace modbus;
-using namespace sunspec;
 
 constexpr uint8_t SMART_METER_ADDRESS = 1;
+constexpr uint8_t BYD_ADDRESS = 21;
 constexpr uint32_t BLINK_OFF_COUNT = 5; // 5 * 16ms => led is ~80ms on when blinking
 
 class SmartMeter : public Component, public sensor::Sensor
 {
 public:
     SmartMeter(uart::UARTComponent* uartModbus, uart::UARTComponent* uartMbus)
-        : m_modbusServer(SMART_METER_ADDRESS,
-                         [this](uint8_t functionCode, const ModbusServer::RequestRead& request) {
-                             return OnModbusReceiveRequest(functionCode, request);
-                         })
+        : m_modbusServer([this](modb::Request& request) {
+            return OnModbusReceiveRequest(request);
+        })
         , m_dlmsMeter(uartMbus)
         , m_meterModel(SMART_METER_ADDRESS)
     {
@@ -36,14 +36,13 @@ public:
         //     m_energyDays[i].ReceivedKwh = beginPlus - (todayIdx - i) * 10;
         //     m_energyDays[i].ProvidedKwh = beginMinus - (todayIdx - i) * 8;
         // }
-        
+
         m_modbusServer.set_uart_parent(uartModbus);
         // None GUI sensor, just to get access from yaml if needed.
         set_internal(true);
 
         // 0x38, 0x68, 0x68, 0x69, 0x71, 0x7A, 0x32, 0x45, 0x6B, 0x75, 0x53, 0x48, 0x53, 0x4B, 0x51, 0x37
-        uint8_t key[]
-            = {0x38, 0x68, 0x68, 0x69, 0x71, 0x7A, 0x32, 0x45, 0x6B, 0x75, 0x53, 0x48, 0x53, 0x4B, 0x51, 0x37};
+        uint8_t key[] = {0x38, 0x68, 0x68, 0x69, 0x71, 0x7A, 0x32, 0x45, 0x6B, 0x75, 0x53, 0x48, 0x53, 0x4B, 0x51, 0x37};
         m_dlmsMeter.set_key(key, 16); // Pass your decryption key and key length here
 
         m_dlmsMeter.set_voltage_sensors(&id(voltage_l1), &id(voltage_l2),
@@ -52,8 +51,9 @@ public:
         m_dlmsMeter.set_current_sensors(&id(current_l1), &id(current_l2),
                                         &id(current_l3)); // Set sensors to use for current (optional)
 
-        m_dlmsMeter.set_active_power_sensors(&id(active_power_plus),
-                                             &id(active_power_minus)); // Set sensors to use for active power (optional)
+        m_dlmsMeter.set_active_power_sensors(
+            &id(active_power_plus),
+            &id(active_power_minus)); // Set sensors to use for active power (optional)
 
         m_dlmsMeter.set_active_energy_sensors(
             &id(active_energy_plus),
@@ -62,7 +62,9 @@ public:
             &id(reactive_energy_plus),
             &id(reactive_energy_minus)); // Set sensors to use for reactive energy (optional)
 
-        m_dlmsMeter.RegisterForMeterData([this](const espdm::DlmsMeter::MeterData& data) { OnReceiveMeterData(data); });
+        m_dlmsMeter.RegisterForMeterData([this](const espdm::DlmsMeter::MeterData& data) {
+            OnReceiveMeterData(data);
+        });
     }
 
     void setup() override
@@ -110,12 +112,11 @@ public:
         id(power_factor).publish_state(powerFactor);
 
         const float activeEnergyPerPhase = data.activeEnergyPlus / 3.0f;
-        m_meterModel.SetTotalWattHoursImported(data.activeEnergyPlus, activeEnergyPerPhase, activeEnergyPerPhase,
-                                               activeEnergyPerPhase);
+        m_meterModel.SetTotalWattHoursImported(data.activeEnergyPlus, activeEnergyPerPhase, activeEnergyPerPhase, activeEnergyPerPhase);
 
         const float reactiveEnergyPerPhase = data.reactiveEnergyPlus / 3.0f;
-        m_meterModel.SetTotalVaHoursImported(data.reactiveEnergyPlus, reactiveEnergyPerPhase, reactiveEnergyPerPhase,
-                                             reactiveEnergyPerPhase);
+        m_meterModel.SetTotalVaHoursImported(
+            data.reactiveEnergyPlus, reactiveEnergyPerPhase, reactiveEnergyPerPhase, reactiveEnergyPerPhase);
 
         data.GetPower(total, value1, value2, value3);
         m_meterModel.SetPower(total, value1, value2, value3);
@@ -132,30 +133,24 @@ public:
         ESP_LOGD("sm", "MeterModel data updated");
     }
 
-    ModbusServer::ResponseRead OnModbusReceiveRequest(uint8_t functionCode, const ModbusServer::RequestRead& request)
+    void OnModbusReceiveRequest(modb::Request& request)
     {
-        ModbusServer::ResponseRead response;
-        if (functionCode != 0x03)
+        modb::IModbusRegisters* registersModel(nullptr);
+        auto address = request.GetModbusAddress();
+        if (address == SMART_METER_ADDRESS)
         {
-            response.SetError(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_FUNCTION);
-            ESP_LOGW("sm", "Modbus received wrong functionCode %d", functionCode);
+            registersModel = &m_meterModel;
         }
-        else
-        {
-            ESP_LOGD("sm", "Modbus request received: address = %d, count = %d", request.startAddress,
-                     request.addressCount);
-            if (m_meterModel.IsValidAddressRange(request.startAddress, request.addressCount) == false)
-            {
-                response.SetError(ModbusServer::ResponseRead::ErrorCode::ILLEGAL_ADDRESS);
-            }
-            else
-            {
-                response.SetData(m_meterModel.GetRegisterRaw(request.startAddress, request.addressCount));
-            }
-        }
-        SetStatusLed(true, response.IsError());
 
-        return response;
+        if (registersModel == nullptr)
+        {
+            ESP_LOGD("mbsrv", "Not processed: %s", request.ToString().c_str());
+            return;
+        }
+
+        const auto ok = request.Process(*registersModel);
+        ESP_LOGD("mbsrv", "Processed[%d]: %s", ok, request.ToString().c_str());
+        SetStatusLed(true, !ok);
     }
 
     void ShowStatistics()
@@ -173,7 +168,7 @@ public:
         for (int idx = startIdx; idx > startIdx - 6; idx--)
         {
             const auto energyDiff = m_energyDays[GetDayOfWeekIdx(idx)].GetDifference(m_energyDays[GetDayOfWeekIdx(idx - 1)]);
-            char temp[64] = { 0 };
+            char temp[64] = {0};
             sprintf(temp, "%7.3f|\n", energyDiff.ReceivedKwh - energyDiff.ProvidedKwh);
 
             weekValues += energyDiff.ToString() + temp;
@@ -184,29 +179,31 @@ public:
 private:
     struct ElectricEnergy
     {
-        float ReceivedKwh{0.0f};   // Bezug
-        float ProvidedKwh{0.0f};   // Einspeisung
+        float ReceivedKwh{0.0f}; // Bezug
+        float ProvidedKwh{0.0f}; // Einspeisung
 
         ElectricEnergy GetDifference(const ElectricEnergy& other) const
         {
             ElectricEnergy diff;
-            diff.ReceivedKwh = ReceivedKwh != 0.0f && other.ReceivedKwh != 0.0f && ReceivedKwh > other.ReceivedKwh? 
-                                    ReceivedKwh - other.ReceivedKwh : 0.0f;
-            diff.ProvidedKwh = ProvidedKwh != 0.0f && other.ProvidedKwh != 0.0f && ProvidedKwh > other.ProvidedKwh? 
-                                    ProvidedKwh - other.ProvidedKwh : 0.0f;
+            diff.ReceivedKwh = ReceivedKwh != 0.0f && other.ReceivedKwh != 0.0f && ReceivedKwh > other.ReceivedKwh
+                ? ReceivedKwh - other.ReceivedKwh
+                : 0.0f;
+            diff.ProvidedKwh = ProvidedKwh != 0.0f && other.ProvidedKwh != 0.0f && ProvidedKwh > other.ProvidedKwh
+                ? ProvidedKwh - other.ProvidedKwh
+                : 0.0f;
             return diff;
         }
         std::string ToString() const
         {
-            char temp[64] = { 0 };
+            char temp[64] = {0};
             sprintf(temp, "|%7.3f|%7.3f|", ReceivedKwh, ProvidedKwh);
             return temp;
         }
     };
 
-    ModbusServer m_modbusServer;
+    modb::ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
-    MeterModel m_meterModel;
+    sunspec::MeterModel m_meterModel;
     utils::Stopwatch m_uptime;
     uint32_t m_statusLedBlinkCount{0};
     std::array<ElectricEnergy, 7> m_energyDays;

@@ -158,3 +158,43 @@ TEST_F(SunspecMeterModelTest, SetTotalVaHoursImported)
     m_meter.SetTotalVaHoursImported(VALUE1, VALUE2, VALUE3, VALUE4);
     CheckFloatValues(40153);
 }
+
+TEST_F(SunspecMeterModelTest, Read_Valid_ReturnsOk)
+{
+    const auto address = sunspec::REGISTER_OFFSET;
+    const auto count = sunspec::REGISTER_TOTAL_COUNT;
+    std::vector<uint8_t> data(count * modb::REGISTER_SIZE);
+    ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::None);
+    auto reg = m_meter.GetRegister(address, count);
+    ASSERT_EQ(std::memcmp(&reg[0], &data[0], count * sizeof(uint16_t)), 0);
+
+    // change some values
+    m_meter.SetTotalVaHoursImported(VALUE1, VALUE2, VALUE3, VALUE4);
+    ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::None);
+    reg = m_meter.GetRegister(address, count);
+    ASSERT_EQ(std::memcmp(&reg[0], &data[0], count * sizeof(uint16_t)), 0);
+}
+
+TEST_F(SunspecMeterModelTest, Read_InvalidAddress_ReturnsError)
+{
+    const auto address = sunspec::REGISTER_OFFSET + sunspec::REGISTER_TOTAL_COUNT;
+    const auto count = 5;
+    std::vector<uint8_t> data(count * sizeof(uint16_t));
+    ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::IllegalAddress);
+}
+
+TEST_F(SunspecMeterModelTest, Read_InvalidCount_ReturnsError)
+{
+    const auto address = sunspec::REGISTER_OFFSET;
+    const auto count = sunspec::REGISTER_TOTAL_COUNT + 1;
+    std::vector<uint8_t> data(count * sizeof(uint16_t));
+    ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::IllegalAddress);
+}
+
+TEST_F(SunspecMeterModelTest, Write_ReturnsError)
+{
+    const auto address = 40000;
+    const auto count = 5;
+    std::vector<uint8_t> data(count * sizeof(uint16_t));
+    ASSERT_EQ(m_meter.Write(address, count, &data[0]), modb::ResponseError::IllegalFunction);
+}

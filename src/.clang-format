@@ -1,0 +1,46 @@
+# Google C/C++ Code Style settings
+# https://clang.llvm.org/docs/ClangFormatStyleOptions.html
+
+BasedOnStyle: Webkit
+Language: Cpp
+Standard: Auto
+Cpp11BracedListStyle: true
+SpaceInEmptyBlock: true
+SpaceInEmptyParentheses: false
+SpaceBeforeCpp11BracedList : false
+IndentWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+ColumnLimit: 140
+NamespaceIndentation: None
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel:        true
+  AfterClass:            true
+  AfterControlStatement: Always
+  AfterEnum:             true
+  AfterFunction:         true
+  AfterNamespace:        true
+  AfterObjCDeclaration:  true
+  AfterStruct:           true
+  AfterUnion:            true
+  AfterExternBlock:      true
+  BeforeCatch:           true
+  BeforeElse:            true
+  IndentBraces:          false
+  SplitEmptyFunction:    false
+  SplitEmptyRecord:      false
+  SplitEmptyNamespace:   false
+AlignAfterOpenBracket: AlwaysBreak
+AlwaysBreakTemplateDeclarations: Yes
+BreakConstructorInitializers: BeforeComma
+SpaceBeforeParens: ControlStatements
+FixNamespaceComments: true
+PointerAlignment: Left
+SortIncludes: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: Empty
+IndentPPDirectives: BeforeHash
+BinPackParameters: false
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false

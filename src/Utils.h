@@ -27,11 +27,11 @@ std::string GetTimespanString(int64_t millis)
     return temp;
 }
 
-// Stopwatch that handles also uint32_t rollover (~49days), 
+// Stopwatch that handles also uint32_t rollover (~49days),
 // but calling GetElapsedMillis() interval must be less than 49days
 class Stopwatch
 {
-public:    
+public:
     Stopwatch(bool startNow = true)
     {
         if (startNow)

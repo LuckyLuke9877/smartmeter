@@ -1,10 +1,11 @@
 #pragma once
 
+#include "conversion.h"
+#include "modbus_interface.h"
+
 #include <cstring>
 #include <stdint.h>
 #include <vector>
-
-#define CHAR2UINT16(c1, c2) uint16_t(uint8_t(c1) << 8) | uint8_t(c2)
 
 namespace sunspec
 {
@@ -19,18 +20,7 @@ constexpr auto REGISTER_METER_COUNT = 2 + 124;
 constexpr auto REGISTER_END_COUNT = 2;
 constexpr auto REGISTER_TOTAL_COUNT = REGISTER_COMMON_COUNT + REGISTER_METER_COUNT + REGISTER_END_COUNT;
 
-template <typename T>
-T Convert2BigEndian(T n)
-{
-    T m;
-    for (size_t i = 0; i < sizeof(T); i++)
-    {
-        reinterpret_cast<uint8_t*>(&m)[i] = reinterpret_cast<uint8_t*>(&n)[sizeof(T) - 1 - i];
-    }
-    return m;
-}
-
-class MeterModel
+class MeterModel : public modb::IModbusRegisters
 {
 public:
     MeterModel(uint8_t modbusAddress)
@@ -63,6 +53,25 @@ public:
         // End block
         SetRegisterUint16(195, 0xFFFF);
         SetRegisterUint16(196, 0); // Number of registers in this block following this entry
+    }
+
+    virtual ~MeterModel() { }
+
+    virtual modb::ResponseError Read(const uint16_t registerAddress, const uint16_t registerCount, uint8_t* target) const
+    {
+        const int32_t registerIndex = GetRegisterIndexForRange(registerAddress, registerCount);
+        if (registerIndex < 0)
+        {
+            return modb::ResponseError::IllegalAddress; // invalid index
+        }
+        std::memcpy(target, &m_registers[registerIndex], registerCount * sizeof(m_registers[0]));
+
+        return modb::ResponseError::None;
+    }
+    virtual modb::ResponseError Write(const uint16_t /*registerAddress*/, const uint16_t /*registerCount*/, const uint8_t* /*source*/)
+    {
+        // Not supported
+        return modb::ResponseError::IllegalFunction;
     }
 
     void SetAcCurrent(float total, float phaseA, float phaseB, float phaseC)
@@ -115,7 +124,7 @@ public:
     }
     // Rest is not needed
 
-    std::vector<uint16_t> GetRegister(uint32_t registerAddress, uint8_t registerCount)
+    std::vector<uint16_t> GetRegister(const uint16_t registerAddress, const uint16_t registerCount) const
     {
         const int32_t registerIndex = GetRegisterIndexForRange(registerAddress, registerCount);
         if (registerIndex < 0)
@@ -128,26 +137,8 @@ public:
         return reg;
     }
 
-    std::vector<uint8_t> GetRegisterRaw(uint32_t registerAddress, uint8_t registerCount)
-    {
-        const int32_t registerIndex = GetRegisterIndexForRange(registerAddress, registerCount);
-        if (registerIndex < 0)
-        {
-            return {}; // invalid index
-        }
-        std::vector<uint8_t> raw(registerCount * sizeof(m_registers[0]));
-        std::memcpy(&raw[0], &m_registers[registerIndex], raw.size());
-
-        return raw;
-    }
-
-    bool IsValidAddressRange(uint32_t registerAddress, uint8_t registerCount)
-    {
-        return GetRegisterIndexForRange(registerAddress, registerCount) >= 0;
-    }
-
 private:
-    int32_t GetRegisterIndexForRange(uint32_t registerAddress, uint8_t registerCount)
+    int32_t GetRegisterIndexForRange(const uint16_t registerAddress, const uint16_t registerCount) const
     {
         // registerAddress is already REGISTER_OFFSET-based! (e.g. sunspec-address: 40001 is
         // registerAddress: 40000)
