@@ -3,9 +3,12 @@ esphome:
   friendly_name: Smart-Meter
   includes:
     - ./esphome-dlms-meter
-    - sunspec_meter_model.h
+    - conversion.h
+    - modbus_interface.h
+    - modbus_request.h
     - modbus_server.h
     - smart_meter.h
+    - sunspec_meter_model.h
     - Utils.h
 
   on_boot:
