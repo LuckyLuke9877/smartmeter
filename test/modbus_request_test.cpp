@@ -5,6 +5,8 @@
 #include <cstring>
 #include <vector>
 
+using namespace testutils;
+
 //////////////////////////////////////////////////////////////////////
 class Request03Test : public ::testing::Test
 {

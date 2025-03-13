@@ -1,3 +1,5 @@
+#pragma once
+
 #include <algorithm>
 #include <deque>
 #include <functional>
@@ -76,17 +78,6 @@ uint16_t crc16(const uint8_t* data, uint8_t len)
         }
     }
     return crc;
-}
-
-template <typename T>
-T Convert2BigEndian(T n)
-{
-    T m;
-    for (size_t i = 0; i < sizeof(T); i++)
-    {
-        reinterpret_cast<uint8_t*>(&m)[i] = reinterpret_cast<uint8_t*>(&n)[sizeof(T) - 1 - i];
-    }
-    return m;
 }
 
 } // namespace esphome

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "conversion.h"
-#include "modbus_interface.h"
+#include "modbus_registers.h"
 
 #include <cstring>
 #include <stdint.h>
@@ -20,29 +20,23 @@ constexpr auto REGISTER_METER_COUNT = 2 + 124;
 constexpr auto REGISTER_END_COUNT = 2;
 constexpr auto REGISTER_TOTAL_COUNT = REGISTER_COMMON_COUNT + REGISTER_METER_COUNT + REGISTER_END_COUNT;
 
-class MeterModel : public modb::IModbusRegisters
+class MeterModel : public modb::ModbusRegisters
 {
 public:
     MeterModel(uint8_t modbusAddress)
+        : modb::ModbusRegisters(REGISTER_OFFSET, REGISTER_TOTAL_COUNT)
     {
         // Init static data
-        std::memset(m_registers, 0, sizeof(m_registers));
         // Common block
-        SetRegisterUint32(0, 0x53756e53); // "SunS"
+        SetRegisterString(0, "SunS", 2);
         SetRegisterUint16(2, 0x0001);
         SetRegisterUint16(3, REGISTER_COMMON_COUNT - 4); // Number of registers in this block following this entry
 
-        SetRegisterUint16(4, CHAR2UINT16(':', ')'));
+        SetRegisterString(4, ":)", 16);
 
-        SetRegisterUint16(20, CHAR2UINT16('K', 'a'));
-        SetRegisterUint16(21, CHAR2UINT16('i', '2'));
-        SetRegisterUint16(22, CHAR2UINT16('S', 'u'));
-        SetRegisterUint16(23, CHAR2UINT16('n', 'M'));
-        SetRegisterUint16(24, CHAR2UINT16('o', 'd'));
+        SetRegisterString(20, "Kai2SunMod", 24);
 
-        SetRegisterUint16(44, CHAR2UINT16('V', '0'));
-        SetRegisterUint16(45, CHAR2UINT16('.', '1'));
-        SetRegisterUint16(46, CHAR2UINT16('.', '0'));
+        SetRegisterString(44, "V0.1.0", 24);
 
         SetRegisterUint16(68, modbusAddress);
 
@@ -57,17 +51,6 @@ public:
 
     virtual ~MeterModel() { }
 
-    virtual modb::ResponseError Read(const uint16_t registerAddress, const uint16_t registerCount, uint8_t* target) const
-    {
-        const int32_t registerIndex = GetRegisterIndexForRange(registerAddress, registerCount);
-        if (registerIndex < 0)
-        {
-            return modb::ResponseError::IllegalAddress; // invalid index
-        }
-        std::memcpy(target, &m_registers[registerIndex], registerCount * sizeof(m_registers[0]));
-
-        return modb::ResponseError::None;
-    }
     virtual modb::ResponseError Write(const uint16_t /*registerAddress*/, const uint16_t /*registerCount*/, const uint8_t* /*source*/)
     {
         // Not supported
@@ -123,61 +106,6 @@ public:
         SetFloats(153, {total, phaseA, phaseB, phaseC});
     }
     // Rest is not needed
-
-    std::vector<uint16_t> GetRegister(const uint16_t registerAddress, const uint16_t registerCount) const
-    {
-        const int32_t registerIndex = GetRegisterIndexForRange(registerAddress, registerCount);
-        if (registerIndex < 0)
-        {
-            return {}; // invalid index
-        }
-        std::vector<uint16_t> reg(registerCount);
-        std::memcpy(&reg[0], &m_registers[registerIndex], reg.size() * sizeof(m_registers[0]));
-
-        return reg;
-    }
-
-private:
-    int32_t GetRegisterIndexForRange(const uint16_t registerAddress, const uint16_t registerCount) const
-    {
-        // registerAddress is already REGISTER_OFFSET-based! (e.g. sunspec-address: 40001 is
-        // registerAddress: 40000)
-        const int32_t registerIndex = registerAddress - REGISTER_OFFSET;
-        if (registerCount < 1 || registerIndex < 0 || (registerIndex + registerCount - 1) >= REGISTER_TOTAL_COUNT)
-        {
-            return -1; // invalid index
-        }
-
-        return registerIndex;
-    }
-
-    void SetFloats(uint32_t registerIndex, const std::vector<float>& values)
-    {
-        for (size_t i = 0; i < values.size(); i++)
-        {
-            SetRegisterFloat(registerIndex + (i * 2), values[i]);
-        }
-    }
-    void SetRegisterUint16(uint32_t registerIndex, uint16_t value)
-    {
-        SetRegister(registerIndex, value);
-    }
-    void SetRegisterUint32(uint32_t registerIndex, uint32_t value)
-    {
-        SetRegister(registerIndex, value);
-    }
-    void SetRegisterFloat(uint32_t registerIndex, float value)
-    {
-        SetRegister(registerIndex, value);
-    }
-    template <typename T>
-    void SetRegister(uint32_t registerIndex, T value)
-    {
-        T temp = Convert2BigEndian(value);
-        std::memcpy(m_registers + registerIndex, &temp, sizeof(temp));
-    }
-
-    uint16_t m_registers[REGISTER_TOTAL_COUNT];
 };
 
 } // namespace sunspec

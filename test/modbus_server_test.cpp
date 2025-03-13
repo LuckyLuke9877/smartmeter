@@ -7,6 +7,7 @@
 #include <cstring>
 
 using namespace esphome;
+using namespace testutils;
 
 class ModbusServerTest : public ::testing::Test
 {
@@ -17,8 +18,9 @@ protected:
 
     void SetUp() override
     {
-        m_server.reset(
-            new modb::ModbusServer([this](modb::Request& request) { return OnModbusReceiveRequest(request); }));
+        m_server.reset(new modb::ModbusServer([this](modb::Request& request) {
+            return OnModbusReceiveRequest(request);
+        }));
     }
     void TearDown() override { }
 

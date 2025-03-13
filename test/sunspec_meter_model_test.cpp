@@ -1,23 +1,18 @@
 #include <gtest/gtest.h>
+#include "modbus_test_utils.h"
 #include "../src/sunspec_meter_model.h"
 
 using namespace sunspec;
+using namespace testutils;
 
 namespace
 {
+
 constexpr uint8_t MODBUS_ADDRESS = 0x01;
 constexpr auto VALUE1 = 1.1f;
 constexpr auto VALUE2 = 22.22f;
 constexpr auto VALUE3 = 333.333f;
 constexpr auto VALUE4 = 0.4444f;
-
-// Use other conversion method for test
-float ToFloatLittleEndian(uint16_t* reg)
-{
-    // Note: cannot direct cast to float => wrong result!!
-    uint32_t tempUint32 = __builtin_bswap32(*(uint32_t*)reg);
-    return *(reinterpret_cast<float*>(&tempUint32));
-}
 
 } // namespace
 
@@ -48,6 +43,7 @@ TEST_F(SunspecMeterModelTest, Constructor_InitializedRegisters)
     ASSERT_EQ(__builtin_bswap16(reg[2]), 1);
     ASSERT_EQ(__builtin_bswap16(reg[3]), 65);
     ASSERT_EQ(__builtin_bswap16(reg[4]), 0x3A29); // ":)"
+    ASSERT_EQ(IsRegisterString(&reg[20], "Kai2SunMod"), true);
     ASSERT_EQ(__builtin_bswap16(reg[68]), MODBUS_ADDRESS);
     ASSERT_EQ(__builtin_bswap16(reg[69]), 213);
     ASSERT_EQ(__builtin_bswap16(reg[70]), 124);

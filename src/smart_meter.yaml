@@ -5,6 +5,7 @@ esphome:
     - ./esphome-dlms-meter
     - conversion.h
     - modbus_interface.h
+    - modbus_registers.h
     - modbus_request.h
     - modbus_server.h
     - smart_meter.h
