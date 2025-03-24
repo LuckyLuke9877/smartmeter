@@ -2,7 +2,7 @@
 
 #ifndef GTEST
     #include "esphome/components/uart/uart.h"
-    #include "esphome/core/helpers.h"
+// #include "esphome/core/helpers.h"
 #endif
 
 #include "modbus_request.h"
@@ -75,12 +75,14 @@ public:
             (crc >> 8) & 0xFF);
     }
 
+    bool m_isFrameInSnyc{true};
     std::vector<uint8_t> m_rxBuffer;
 
 protected:
     OnReceiveRequest m_onReceiveRequest;
     // Requests pool to save memory
     Request03 m_request03;
+    Request16 m_request16;
 
     Request* GetRequest(uint8_t functionCode)
     {
@@ -90,6 +92,10 @@ protected:
         {
             return &m_request03;
         }
+        if (functionCode == 0x10)
+        {
+            return &m_request16;
+        }
 
         return nullptr;
     }
@@ -97,11 +103,10 @@ protected:
     uint32_t ParseModbusFrame()
     {
         const uint32_t needMoreData = 0;
-        const uint32_t tryToFindValidFrame = 1;
 
         size_t bufSize = m_rxBuffer.size();
         // at least address | functionCode
-        if (bufSize < 2)
+        if (bufSize < modb::MIN_REQUEST_FRAME_SIZE)
         {
             return needMoreData;
         }
@@ -114,32 +119,41 @@ protected:
         {
             // We have no idea what the size is, so crc check is not possible.
             // Do not return anything.
-            ESP_LOGW("mbsrv", "Modbus function-code %02x not supported", functionCode);
-            return tryToFindValidFrame;
-        }
-        const auto frameSize = request->GetSize();
-        if (frameSize == 0)
-        {
-            ESP_LOGW("mbsrv", "Modbus invalid frame");
-            return tryToFindValidFrame;
+            if (m_isFrameInSnyc)
+            {
+                ESP_LOGW("mbsrv", "Modbus function-code[%d] not supported, address[%d]", functionCode, address);
+                m_isFrameInSnyc = false;
+            }
+            return modb::TRY_FIND_VALID_FRAME;
         }
 
-        if (bufSize < frameSize)
-        {
-            return needMoreData;
-        }
+        const auto result = request->InitFrame(m_rxBuffer);
+        // Prevent logs - spam while not buffer is not in sync with modbus protocol frame
+        m_isFrameInSnyc = result.canProcess;
 
-        // Validate crc
-        uint16_t computedCrc = crc16(&*begin, frameSize - 2);
-        uint16_t remoteCrc = static_cast<uint16_t>(*(begin + frameSize - 2)) | (static_cast<uint16_t>(*(begin + frameSize - 1)) << 8);
-        if (computedCrc != remoteCrc)
-        {
-            ESP_LOGW("mbsrv", "Invalid CRC");
-            // computed_crc.hi = 0x" << (computed_crc >> 8) << std::dec << std::endl;
-            return tryToFindValidFrame;
-        }
+        // const auto frameSize = request->GetSize();
+        // if (frameSize == 0)
+        // {
+        //     ESP_LOGW("mbsrv", "Modbus invalid frame");
+        //     return tryToFindValidFrame;
+        // }
 
-        if (request->InitFromBuffer(m_rxBuffer))
+        // if (bufSize < frameSize)
+        // {
+        //     return needMoreData;
+        // }
+
+        // // Validate crc
+        // uint16_t computedCrc = crc16(&*begin, frameSize - 2);
+        // uint16_t remoteCrc = static_cast<uint16_t>(*(begin + frameSize - 2)) | (static_cast<uint16_t>(*(begin + frameSize - 1)) << 8);
+        // if (computedCrc != remoteCrc)
+        // {
+        //     ESP_LOGW("mbsrv", "Invalid CRC");
+        //     // computed_crc.hi = 0x" << (computed_crc >> 8) << std::dec << std::endl;
+        //     return tryToFindValidFrame;
+        // }
+
+        if (result.canProcess)
         {
             // client validates the modbus-address
             // ESP_LOGI("mbsrv", "Modbus valid request %02x received", functionCode);
@@ -147,8 +161,8 @@ protected:
             Send(request->GetResponsePayload());
         }
 
-        // Frame can be removed
-        return frameSize;
+        // Frame size that can be removed
+        return result.usedFrameSize;
     }
 };
 

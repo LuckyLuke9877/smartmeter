@@ -13,9 +13,21 @@ void AssertPayloadError(const std::vector<uint8_t>* payload, modb::ResponseError
     ASSERT_EQ((*payload)[2], static_cast<uint8_t>(expectedError));
 }
 
-bool IsRegisterString(uint16_t* reg, const std::string& text)
+bool IsEqualString(uint16_t* reg, const std::string& text)
 {
     return std::memcmp(reg, text.c_str(), text.length()) == 0;
+}
+
+bool IsEqualString(uint8_t* buf, const std::string& text)
+{
+    return std::memcmp(buf, text.c_str(), text.length()) == 0;
+}
+
+bool IsEqualUint16(uint8_t* bufBigEndian, uint16_t valueLittleEndian)
+{
+    // convert to little-endian
+    uint16_t bufValue = *(bufBigEndian + 1) + (*(bufBigEndian + 0) << 8);
+    return bufValue == valueLittleEndian;
 }
 
 // Use other conversion method for test

@@ -43,7 +43,7 @@ TEST_F(SunspecMeterModelTest, Constructor_InitializedRegisters)
     ASSERT_EQ(__builtin_bswap16(reg[2]), 1);
     ASSERT_EQ(__builtin_bswap16(reg[3]), 65);
     ASSERT_EQ(__builtin_bswap16(reg[4]), 0x3A29); // ":)"
-    ASSERT_EQ(IsRegisterString(&reg[20], "Kai2SunMod"), true);
+    ASSERT_EQ(IsEqualString(&reg[20], "Kai2SunMod"), true);
     ASSERT_EQ(__builtin_bswap16(reg[68]), MODBUS_ADDRESS);
     ASSERT_EQ(__builtin_bswap16(reg[69]), 213);
     ASSERT_EQ(__builtin_bswap16(reg[70]), 124);

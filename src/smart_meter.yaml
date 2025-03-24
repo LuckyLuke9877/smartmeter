@@ -3,6 +3,7 @@ esphome:
   friendly_name: Smart-Meter
   includes:
     - ./esphome-dlms-meter
+    - byd_battery_model.h
     - conversion.h
     - modbus_interface.h
     - modbus_registers.h
@@ -11,6 +12,10 @@ esphome:
     - smart_meter.h
     - sunspec_meter_model.h
     - Utils.h
+  platformio_options:
+      build_flags:
+        # enable for debugging / hacking only
+        - -DENABLE_BYD_BAT_WRITE=true
 
   on_boot:
     # Init digital outputs at a early stage
@@ -290,6 +295,26 @@ number:
     max_value: 31
     restore_value: true
     update_interval: never
+  - platform: template
+    name: "6.1 Bat register address"
+    id: bat_reg_address
+    mode: box
+    optimistic: true
+    min_value: 200
+    max_value: 420
+    step: 1
+    initial_value: 300
+    restore_value: false
+  - platform: template
+    name: "6.2 Bat register value"
+    id: bat_reg_value
+    mode: box
+    optimistic: true
+    min_value: 0
+    max_value: 0xFFFF
+    step: 1
+    initial_value: 3
+    restore_value: false
 
 text_sensor:
   - platform: template
@@ -331,6 +356,13 @@ button:
       then:
         - lambda: |-
             static_cast<sm::SmartMeter*>(id(smart_meter))->ShowStatistics();
+  - platform: template
+    name: "6.0 Set Register"
+    id: set_register
+    on_press:
+      then:
+        - lambda: |-
+            static_cast<sm::SmartMeter*>(id(smart_meter))->SetBatRegister(id(bat_reg_address).state, id(bat_reg_value).state);
 
 time:
   - platform: sntp

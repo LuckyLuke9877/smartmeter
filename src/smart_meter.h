@@ -1,10 +1,15 @@
 #pragma once
 
 #include "Utils.h"
+#include "byd_battery_model.h"
 #include "esphome.h"
 #include "modbus_server.h"
 #include "sunspec_meter_model.h"
 #include "./esphome-dlms-meter/espdm.h"
+
+// enable BYD-batterie emulator
+#define BYD_BAT 1
+// see smart_meter.yaml for: ENABLE_BYD_BAT_WRITE
 
 using namespace modb;
 
@@ -141,15 +146,35 @@ public:
         {
             registersModel = &m_meterModel;
         }
-
+#ifdef BYD_BAT
+        else if (address == BYD_ADDRESS)
+        {
+            registersModel = &m_batteryModel;
+        }
+#endif
         if (registersModel == nullptr)
         {
+            // Fronius-Gen24 queries permenant several addresses
             ESP_LOGD("mbsrv", "Not processed: %s", request.ToString().c_str());
             return;
         }
 
         const auto ok = request.Process(*registersModel);
-        ESP_LOGD("mbsrv", "Processed[%d]: %s", ok, request.ToString().c_str());
+        // ESP_LOGD("mbsrv", "Processed[%d]: %s", ok, request.ToString().c_str());
+#ifdef BYD_BAT
+        // test hack
+        if (address == BYD_ADDRESS)
+        {
+            if (ok)
+            {
+                ESP_LOGI("mbsrv", "Processed: %s", request.ToString().c_str());
+            }
+            else
+            {
+                ESP_LOGW("mbsrv", "Not processed: %s", request.ToString().c_str());
+            }
+        }
+#endif
         SetStatusLed(true, !ok);
     }
 
@@ -174,6 +199,14 @@ public:
             weekValues += energyDiff.ToString() + temp;
         }
         ESP_LOGI("Hp", "Energie: |Bezug|Einspeisung|Differenz| in KWH/Tag:\n%s", weekValues.c_str());
+    }
+
+    // Only for debugging / hacking
+    void SetBatRegister(const uint16_t registerAddress, const uint16_t value)
+    {
+        uint16_t valueBe = Convert2BigEndian(value);
+        auto result = m_batteryModel.Write(registerAddress, 1, reinterpret_cast<uint8_t*>(&valueBe));
+        ESP_LOGW("sm", "Bat-Reg[%d] = %d (BE %d) result[%d]", registerAddress, value, valueBe, result);
     }
 
 private:
@@ -204,6 +237,7 @@ private:
     modb::ModbusServer m_modbusServer;
     espdm::DlmsMeter m_dlmsMeter;
     sunspec::MeterModel m_meterModel;
+    byd::BatteryModel m_batteryModel;
     utils::Stopwatch m_uptime;
     uint32_t m_statusLedBlinkCount{0};
     std::array<ElectricEnergy, 7> m_energyDays;

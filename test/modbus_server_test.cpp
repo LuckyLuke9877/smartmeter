@@ -1,6 +1,4 @@
 #include <gtest/gtest.h>
-#define GTEST
-#include "esphome_mock.h"
 #include "modbus_test_utils.h"
 #include "../src/modbus_server.h"
 
