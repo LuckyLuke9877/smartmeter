@@ -1,5 +1,8 @@
 #pragma once
 
+#define GTEST
+#include "esphome_mock.h"
+#include "../src/conversion.h"
 #include "../src/modbus_registers.h"
 
 #include <cstring>
@@ -15,20 +18,11 @@ constexpr uint8_t INVALID_REGISTER_IDX = MAX_REGISTER_COUNT + 1;
 
 void AssertPayloadError(const std::vector<uint8_t>* payload, modb::ResponseError expectedError);
 
-bool IsRegisterString(uint16_t* reg, const std::string& text);
+bool IsEqualString(uint16_t* reg, const std::string& text);
+bool IsEqualString(uint8_t* buf, const std::string& text);
+bool IsEqualUint16(uint8_t* bufBigEndian, uint16_t valueLittleEndian);
 
 float ToFloatLittleEndian(uint16_t* reg);
-
-template <typename T>
-T Convert2BigEndian(T n)
-{
-    T m;
-    for (size_t i = 0; i < sizeof(T); i++)
-    {
-        reinterpret_cast<uint8_t*>(&m)[i] = reinterpret_cast<uint8_t*>(&n)[sizeof(T) - 1 - i];
-    }
-    return m;
-}
 
 class TestRegisters : public modb::ModbusRegisters
 {

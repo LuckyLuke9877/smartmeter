@@ -65,7 +65,7 @@ protected:
         // registerAddress is already REGISTER_OFFSET-based! (e.g. sunspec-address: 40001 is
         // registerAddress: 40000)
         const int32_t registerIndex = registerAddress - m_startOffset;
-        if (registerCount < 1 || registerIndex < 0 || (registerIndex + registerCount - 1) >= m_registers.size())
+        if (registerCount < 1 || registerIndex < 0 || (registerIndex + registerCount) > m_registers.size())
         {
             return -1; // invalid index
         }

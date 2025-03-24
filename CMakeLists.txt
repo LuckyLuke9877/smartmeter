@@ -15,7 +15,8 @@ target_include_directories(${PROJECT_NAME}
 
 target_sources(${PROJECT_NAME}
     PRIVATE
-        # ${CMAKE_CURRENT_SOURCE_DIR}/test/byd_battery_model_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/byd_battery_model_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/esphome_mock.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/test/modbus_request_test.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/test/modbus_server_test.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/test/sunspec_meter_model_test.cpp
