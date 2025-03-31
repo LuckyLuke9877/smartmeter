@@ -8,7 +8,7 @@
 #include "./esphome-dlms-meter/espdm.h"
 
 // enable BYD-batterie emulator
-#define BYD_BAT 1
+// #define BYD_BAT 1
 // see smart_meter.yaml for: ENABLE_BYD_BAT_WRITE
 
 using namespace modb;
@@ -135,6 +135,7 @@ public:
 
         SetEnergyFlow();
         SetEspStatus();
+        CheckChargerState();
         ESP_LOGD("sm", "MeterModel data updated");
     }
 
@@ -154,7 +155,7 @@ public:
 #endif
         if (registersModel == nullptr)
         {
-            // Fronius-Gen24 queries permenant several addresses
+            // Fronius-Gen24 queries permanent several addresses
             ESP_LOGD("mbsrv", "Not processed: %s", request.ToString().c_str());
             return;
         }
@@ -167,7 +168,10 @@ public:
         {
             if (ok)
             {
-                ESP_LOGI("mbsrv", "Processed: %s", request.ToString().c_str());
+                if (request.GetFunctionCode() == 16)
+                {
+                    ESP_LOGI("mbsrv", "Processed: %s", request.ToString().c_str());
+                }
             }
             else
             {
@@ -187,8 +191,13 @@ public:
             ESP_LOGW("sm", "sntp_time is not valid.");
             return;
         }
-        // Electric energy usage: new(yesterday) to old, top to bottom
+        // Electric energy usage: new(today) to old, top to bottom
         const int startIdx = now.day_of_week;
+        // If yesterday has no value ( just rebooted ), set it to now.
+        if (m_energyDays[GetDayOfWeekIdx(startIdx - 1)].ReceivedKwh == 0.0f)
+        {
+            m_energyDays[GetDayOfWeekIdx(startIdx - 1)] = m_energyDays[GetDayOfWeekIdx(startIdx)];
+        }
         std::string weekValues;
         for (int idx = startIdx; idx > startIdx - 6; idx--)
         {
@@ -198,7 +207,31 @@ public:
 
             weekValues += energyDiff.ToString() + temp;
         }
-        ESP_LOGI("Hp", "Energie: |Bezug|Einspeisung|Differenz| in KWH/Tag:\n%s", weekValues.c_str());
+        ESP_LOGI("Hp", "|Bezug  |Einspg.|Diffnz.| Energie in KWH/Tag:\n%s", weekValues.c_str());
+    }
+
+    void SetBydBat(float soc, float voltage, float power)
+    {
+        ESP_LOGI("mbsrv", "SetBydBat(soc=%f, voltage=%f, power=%f)", soc, voltage, power);
+    }
+
+    void SetChargerState(const std::string& state)
+    {
+        id(charger_state).publish_state(state.c_str());
+    }
+
+    void CheckChargerState()
+    {
+        if (api_is_connected() == false)
+        {
+            SetChargerState("OFF");
+            return;
+        }
+        // Set only transition from off to on. Other states are handled by charger.
+        if (id(charger_state).state == "OFF")
+        {
+            SetChargerState("ON");
+        }
     }
 
     // Only for debugging / hacking
