@@ -139,50 +139,6 @@ light:
 
 sensor:
   - platform: template
-    id: voltage_l1
-    name: 2.0 Spannung L1
-    unit_of_measurement: V
-    accuracy_decimals: 1
-    device_class: "voltage"
-    state_class: "measurement"
-  - platform: template
-    id: voltage_l2
-    name: 2.1 Spannung L2
-    unit_of_measurement: V
-    accuracy_decimals: 1
-    device_class: "voltage"
-    state_class: "measurement"
-  - platform: template
-    id: voltage_l3
-    name: 2.2 Spannung L3
-    unit_of_measurement: V
-    accuracy_decimals: 1
-    device_class: "voltage"
-    state_class: "measurement"
-
-  - platform: template
-    id: current_l1
-    name: 2.3 Strom L1
-    unit_of_measurement: A
-    accuracy_decimals: 2
-    device_class: "current"
-    state_class: "measurement"
-  - platform: template
-    id: current_l2
-    name: 2.4 Strom L2
-    unit_of_measurement: A
-    accuracy_decimals: 2
-    device_class: "current"
-    state_class: "measurement"
-  - platform: template
-    id: current_l3
-    name: 2.5 Strom L3
-    unit_of_measurement: A
-    accuracy_decimals: 2
-    device_class: "current"
-    state_class: "measurement"
-
-  - platform: template
     id: active_power_plus
     name: 1.0 Momentan Leistung Bezug
     unit_of_measurement: W
@@ -198,14 +154,14 @@ sensor:
     state_class: "measurement"
   - platform: template
     id: apparent_power
-    name: 2.6 Momentan Scheinleistung
+    name: 2.2 Momentan Scheinleistung
     unit_of_measurement: VA
     accuracy_decimals: 0
     device_class: "power"
     state_class: "measurement"
   - platform: template
     id: power_factor
-    name: 2.7 cos-phi
+    name: 2.3 cos-phi
     accuracy_decimals: 3
     device_class: "power"
     state_class: "measurement"
@@ -363,12 +319,20 @@ text_sensor:
     id: energy_interval_settings
     update_interval: never
   - platform: template
-    name: 1.7 Gerätelaufzeit V25.03.31
+    name: 1.7 Gerätelaufzeit V25.04.10
     id: device_uptime
     update_interval: never
   - platform: template
     name: "1.8 Free memory"
     id: free_memory
+    update_interval: never
+  - platform: template
+    name: "2.0 Spannung L1/2/3"
+    id: voltage
+    update_interval: never
+  - platform: template
+    name: "2.1 Strom L1/2/3"
+    id: current
     update_interval: never
   - platform: template
     name: 6.3 Charge Status

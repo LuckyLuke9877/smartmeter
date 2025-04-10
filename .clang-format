@@ -4,7 +4,7 @@
 BasedOnStyle: Webkit
 Language: Cpp
 Standard: Auto
-Cpp11BracedListStyle: true
+Cpp11BracedListStyle: false
 SpaceInEmptyBlock: true
 SpaceInEmptyParentheses: false
 SpaceBeforeCpp11BracedList : false

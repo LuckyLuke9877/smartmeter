@@ -7,22 +7,21 @@
 
 namespace
 {
-const char ESPDM_VERSION[] = {"0.9.1"};
-const char TAG[] = {"espdm"};
+const char ESPDM_VERSION[] = { "0.9.1" };
+const char TAG[] = { "espdm" };
 } // namespace
 
 namespace esphome
 {
 
-void PublishSensorState(sensor::Sensor& sensor, float value, float impossibleLimit = 0.0f)
+float GetLimitedValue(float value, float impossibleLimit = 0.0f)
 {
     if (impossibleLimit != 0.0f && value > impossibleLimit)
     {
-        ESP_LOGE(TAG, "%s value[%f] is greater than limit[%f]. Set it to 0.0.", sensor.get_name().c_str(), value,
-                 impossibleLimit);
+        ESP_LOGE(TAG, "value[%f] is greater than limit[%f]. Set it to 0.0.", value, impossibleLimit);
         value = 0.0f;
     }
-    sensor.publish_state(value);
+    return value;
 }
 
 namespace espdm
@@ -101,14 +100,14 @@ void DlmsMeter::loop()
             ESP_LOGV(TAG, "DLMS: Message length <= 127");
         }
 
-        messageLength
-            -= DLMS_LENGTH_CORRECTION; // Correct message length due to part of header being included in length
+        messageLength -= DLMS_LENGTH_CORRECTION; // Correct message length due to part of header being included in length
 
         if (m_dlmsData.size() - DLMS_HEADER_LENGTH - headerOffset != messageLength)
         {
             // Note: Kaifa309M sends multiple(2) mbus-frames for one dlms-frame, this is normal flow.
-            ESP_LOGD(TAG, "DLMS: Frame[%d] has not enough data yet, current length[%d]", messageLength,
-                     m_dlmsData.size() - DLMS_HEADER_LENGTH - headerOffset);
+            ESP_LOGD(
+                TAG, "DLMS: Frame[%d] has not enough data yet, current length[%d]", messageLength,
+                m_dlmsData.size() - DLMS_HEADER_LENGTH - headerOffset);
             continue; // Wait for more data to come
         }
 
@@ -146,8 +145,8 @@ void DlmsMeter::loop()
         mbedtls_gcm_init(&this->aes);
         mbedtls_gcm_setkey(&this->aes, MBEDTLS_CIPHER_ID_AES, this->key, this->keyLength * 8);
 
-        mbedtls_gcm_auth_decrypt(&this->aes, messageLength, iv, sizeof(iv), NULL, 0, NULL, 0,
-                                 &m_dlmsData[headerOffset + DLMS_PAYLOAD_OFFSET], &plaintext[0]);
+        mbedtls_gcm_auth_decrypt(
+            &this->aes, messageLength, iv, sizeof(iv), NULL, 0, NULL, 0, &m_dlmsData[headerOffset + DLMS_PAYLOAD_OFFSET], &plaintext[0]);
 
         mbedtls_gcm_free(&this->aes);
 #else
@@ -165,7 +164,6 @@ void DlmsMeter::loop()
         ESP_LOGV(TAG, "Decoding payload");
 
         int currentPosition = DECODER_START_OFFSET;
-
         do
         {
             if (plaintext[currentPosition + OBIS_TYPE_OFFSET] != DataType::OctetString)
@@ -194,84 +192,83 @@ void DlmsMeter::loop()
             uint8_t dataLength = 0x00;
 
             CodeType codeType = CodeType::Unknown;
+            float* meterValue(nullptr);
+            float meterValueLimit(0.0f);
 
-            if (obisCode[OBIS_A] == Medium::Electricity)
+            if (obisCode[OBIS_A] == Medium::Electricity || obisCode[OBIS_A] == Medium::Abstract)
             {
-                // Compare C and D against code
-                if (memcmp(&obisCode[OBIS_C], ESPDM_VOLTAGE_L1, 2) == 0)
+                uint16_t* obisC = reinterpret_cast<uint16_t*>(&obisCode[OBIS_C]);
+                switch (*obisC)
                 {
+                case CodeType::VoltageL1:
+                    meterValue = &m_meterData.voltageL1;
+                    meterValueLimit = IMPOSSIBLE_VOLTAGE_LIMIT;
                     codeType = CodeType::VoltageL1;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_VOLTAGE_L2, 2) == 0)
-                {
+                    break;
+                case CodeType::VoltageL2:
+                    meterValue = &m_meterData.voltageL2;
+                    meterValueLimit = IMPOSSIBLE_VOLTAGE_LIMIT;
                     codeType = CodeType::VoltageL2;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_VOLTAGE_L3, 2) == 0)
-                {
+                    break;
+                case CodeType::VoltageL3:
+                    meterValue = &m_meterData.voltageL3;
+                    meterValueLimit = IMPOSSIBLE_VOLTAGE_LIMIT;
                     codeType = CodeType::VoltageL3;
-                }
-
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_CURRENT_L1, 2) == 0)
-                {
+                    break;
+                case CodeType::CurrentL1:
+                    meterValue = &m_meterData.currentL1;
+                    meterValueLimit = IMPOSSIBLE_CURRENT_LIMIT;
                     codeType = CodeType::CurrentL1;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_CURRENT_L2, 2) == 0)
-                {
+                    break;
+                case CodeType::CurrentL2:
+                    meterValue = &m_meterData.currentL2;
+                    meterValueLimit = IMPOSSIBLE_CURRENT_LIMIT;
                     codeType = CodeType::CurrentL2;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_CURRENT_L3, 2) == 0)
-                {
+                    break;
+                case CodeType::CurrentL3:
+                    meterValue = &m_meterData.currentL3;
+                    meterValueLimit = IMPOSSIBLE_CURRENT_LIMIT;
                     codeType = CodeType::CurrentL3;
-                }
-
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_ACTIVE_POWER_PLUS, 2) == 0)
-                {
+                    break;
+                case CodeType::ActivePowerPlus:
+                    meterValue = &m_meterData.activePowerPlus;
+                    meterValueLimit = IMPOSSIBLE_POWER_LIMIT;
                     codeType = CodeType::ActivePowerPlus;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_ACTIVE_POWER_MINUS, 2) == 0)
-                {
+                    break;
+                case CodeType::ActivePowerMinus:
+                    meterValue = &m_meterData.activePowerMinus;
+                    meterValueLimit = IMPOSSIBLE_POWER_LIMIT;
                     codeType = CodeType::ActivePowerMinus;
-                }
-
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_ACTIVE_ENERGY_PLUS, 2) == 0)
-                {
+                    break;
+                case CodeType::ActiveEnergyPlus:
+                    meterValue = &m_meterData.activeEnergyPlus;
                     codeType = CodeType::ActiveEnergyPlus;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_ACTIVE_ENERGY_MINUS, 2) == 0)
-                {
+                    break;
+                case CodeType::ActiveEnergyMinus:
+                    meterValue = &m_meterData.activeEnergyMinus;
                     codeType = CodeType::ActiveEnergyMinus;
-                }
-
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_REACTIVE_ENERGY_PLUS, 2) == 0)
-                {
+                    break;
+                case CodeType::ReactiveEnergyPlus:
+                    meterValue = &m_meterData.reactiveEnergyPlus;
                     codeType = CodeType::ReactiveEnergyPlus;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_REACTIVE_ENERGY_MINUS, 2) == 0)
-                {
+                    break;
+                case CodeType::ReactiveEnergyMinus:
+                    meterValue = &m_meterData.reactiveEnergyMinus;
                     codeType = CodeType::ReactiveEnergyMinus;
-                }
-                else
-                {
-                    ESP_LOGW(TAG, "OBIS: Unsupported OBIS code");
-                }
-            }
-            else if (obisCode[OBIS_A] == Medium::Abstract)
-            {
-                if (memcmp(&obisCode[OBIS_C], ESPDM_TIMESTAMP, 2) == 0)
-                {
+                    break;
+                case CodeType::Timestamp:
                     codeType = CodeType::Timestamp;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_SERIAL_NUMBER, 2) == 0)
-                {
+                    break;
+                case CodeType::SerialNumber:
                     codeType = CodeType::SerialNumber;
-                }
-                else if (memcmp(&obisCode[OBIS_C], ESPDM_DEVICE_NAME, 2) == 0)
-                {
+                    break;
+                case CodeType::DeviceName:
                     codeType = CodeType::DeviceName;
-                }
-                else
-                {
-                    ESP_LOGW(TAG, "OBIS: Unsupported OBIS code");
+                    break;
+
+                default:
+                    ESP_LOGW(TAG, "OBIS: Unsupported OBIS code = %d", *obisC);
+                    break;
                 }
             }
             else
@@ -280,10 +277,10 @@ void DlmsMeter::loop()
                 return AbortDlmsParsing();
             }
 
-            uint8_t uint8Value;
-            uint16_t uint16Value;
-            uint32_t uint32Value;
-            float floatValue;
+            uint8_t uint8Value(0);
+            uint16_t uint16Value(0);
+            uint32_t uint32Value(0);
+            float floatValue(0.0f);
 
             switch (dataType)
             {
@@ -295,27 +292,10 @@ void DlmsMeter::loop()
 
                 floatValue = uint32Value; // Ignore decimal digits for now
 
-                if (codeType == CodeType::ActivePowerPlus && this->active_power_plus != NULL
-                    && this->active_power_plus->state != floatValue)
-                    PublishSensorState(*active_power_plus, floatValue, IMPOSSIBLE_POWER_LIMIT);
-                else if (codeType == CodeType::ActivePowerMinus && this->active_power_minus != NULL
-                         && this->active_power_minus->state != floatValue)
-                    PublishSensorState(*active_power_minus, floatValue, IMPOSSIBLE_POWER_LIMIT);
-
-                else if (codeType == CodeType::ActiveEnergyPlus && this->active_energy_plus != NULL
-                         && this->active_energy_plus->state != floatValue)
-                    this->active_energy_plus->publish_state(floatValue);
-                else if (codeType == CodeType::ActiveEnergyMinus && this->active_energy_minus != NULL
-                         && this->active_energy_minus->state != floatValue)
-                    this->active_energy_minus->publish_state(floatValue);
-
-                else if (codeType == CodeType::ReactiveEnergyPlus && this->reactive_energy_plus != NULL
-                         && this->reactive_energy_plus->state != floatValue)
-                    this->reactive_energy_plus->publish_state(floatValue);
-                else if (codeType == CodeType::ReactiveEnergyMinus && this->reactive_energy_minus != NULL
-                         && this->reactive_energy_minus->state != floatValue)
-                    this->reactive_energy_minus->publish_state(floatValue);
-
+                if (meterValue)
+                {
+                    *meterValue = GetLimitedValue(floatValue, meterValueLimit);
+                }
                 break;
             case DataType::LongUnsigned:
                 dataLength = 2;
@@ -330,31 +310,16 @@ void DlmsMeter::loop()
                 else
                     floatValue = uint16Value; // No decimal places
 
-                if (codeType == CodeType::VoltageL1 && this->voltage_l1 != NULL
-                    && this->voltage_l1->state != floatValue)
-                    PublishSensorState(*voltage_l1, floatValue, IMPOSSIBLE_VOLTAGE_LIMIT);
-                else if (codeType == CodeType::VoltageL2 && this->voltage_l2 != NULL
-                         && this->voltage_l2->state != floatValue)
-                    PublishSensorState(*voltage_l2, floatValue, IMPOSSIBLE_VOLTAGE_LIMIT);
-                else if (codeType == CodeType::VoltageL3 && this->voltage_l3 != NULL
-                         && this->voltage_l3->state != floatValue)
-                    PublishSensorState(*voltage_l3, floatValue, IMPOSSIBLE_VOLTAGE_LIMIT);
-
-                else if (codeType == CodeType::CurrentL1 && this->current_l1 != NULL
-                         && this->current_l1->state != floatValue)
-                    PublishSensorState(*current_l1, floatValue, IMPOSSIBLE_CURRENT_LIMIT);
-                else if (codeType == CodeType::CurrentL2 && this->current_l2 != NULL
-                         && this->current_l2->state != floatValue)
-                    PublishSensorState(*current_l2, floatValue, IMPOSSIBLE_CURRENT_LIMIT);
-                else if (codeType == CodeType::CurrentL3 && this->current_l3 != NULL
-                         && this->current_l3->state != floatValue)
-                    PublishSensorState(*current_l3, floatValue, IMPOSSIBLE_CURRENT_LIMIT);
-
+                if (meterValue)
+                {
+                    *meterValue = GetLimitedValue(floatValue, meterValueLimit);
+                }
                 break;
             case DataType::OctetString:
                 dataLength = plaintext[currentPosition];
                 currentPosition++; // Advance past string length
 
+#if defined(USE_MQTT)
                 if (codeType == CodeType::Timestamp) // Handle timestamp generation
                 {
                     char timestamp[21]; // 0000-00-00T00:00:00Z
@@ -379,10 +344,9 @@ void DlmsMeter::loop()
 
                     sprintf(timestamp, "%04u-%02u-%02uT%02u:%02u:%02uZ", year, month, day, hour, minute, second);
 
-#if defined(USE_MQTT)
                     this->timestamp->publish_state(timestamp);
-#endif
                 }
+#endif
 
                 break;
             default:
@@ -395,57 +359,41 @@ void DlmsMeter::loop()
             currentPosition += 2; // Skip break after data
 
             if (plaintext[currentPosition] == 0x0F) // There is still additional data for this type, skip it
-                currentPosition
-                    += 6; // Skip additional data and additional break; this will jump out of bounds on last frame
+                currentPosition += 6; // Skip additional data and additional break; this will jump out of bounds on last frame
         } while (currentPosition <= messageLength); // Loop until arrived at end
 
         ESP_LOGD(TAG, "Received valid data");
         m_dlmsData.clear();
 
         // Apply sign to current to show the direction of current flow
-        if ((active_power_plus->state - active_power_minus->state) < 0.0f)
+        if ((m_meterData.activePowerPlus - m_meterData.activePowerMinus) < 0.0f)
         {
             // Providing power to grid ( Einspeisung ) => negative current flow
-            current_l1->publish_state(-current_l1->state);
-            current_l2->publish_state(-current_l2->state);
-            current_l3->publish_state(-current_l3->state);
+            m_meterData.currentL1 = -m_meterData.currentL1;
+            m_meterData.currentL2 = -m_meterData.currentL2;
+            m_meterData.currentL3 = -m_meterData.currentL3;
         }
 
 #if defined(USE_MQTT)
         if (this->mqtt_client != NULL)
         {
             this->mqtt_client->publish_json(this->topic.c_str(), [=](JsonObject root) {
-                if (this->voltage_l1 != NULL)
-                {
-                    root["voltage_l1"] = this->voltage_l1->state;
-                    root["voltage_l2"] = this->voltage_l2->state;
-                    root["voltage_l3"] = this->voltage_l3->state;
-                }
+                root["voltage_l1"] = m_meterData.voltageL1;
+                root["voltage_l2"] = m_meterData.voltageL2;
+                root["voltage_l3"] = m_meterData.voltageL3;
 
-                if (this->current_l1 != NULL)
-                {
-                    root["current_l1"] = this->current_l1->state;
-                    root["current_l2"] = this->current_l2->state;
-                    root["current_l3"] = this->current_l3->state;
-                }
+                root["current_l1"] = m_meterData.currentL1;
+                root["current_l2"] = m_meterData.currentL2;
+                root["current_l3"] = m_meterData.currentL3;
 
-                if (this->active_power_plus != NULL)
-                {
-                    root["active_power_plus"] = this->active_power_plus->state;
-                    root["active_power_minus"] = this->active_power_minus->state;
-                }
+                root["active_power_plus"] = m_meterData.activePowerPlus;
+                root["active_power_minus"] = m_meterData.activePowerMinus;
 
-                if (this->active_energy_plus != NULL)
-                {
-                    root["active_energy_plus"] = this->active_energy_plus->state;
-                    root["active_energy_minus"] = this->active_energy_minus->state;
-                }
+                root["active_energy_plus"] = m_meterData.activeEnergyPlus;
+                root["active_energy_minus"] = m_meterData.activeEnergyMinus;
 
-                if (this->reactive_energy_plus != NULL)
-                {
-                    root["reactive_energy_plus"] = this->reactive_energy_plus->state;
-                    root["reactive_energy_minus"] = this->reactive_energy_minus->state;
-                }
+                root["reactive_energy_plus"] = m_meterData.reactiveEnergyPlus;
+                root["reactive_energy_minus"] = m_meterData.reactiveEnergyMinus;
 
                 if (this->timestamp != NULL)
                 {
@@ -455,23 +403,9 @@ void DlmsMeter::loop()
         }
 #endif
 
-        // Note: Extension expects all sensors
         if (m_onReceiveMeterData)
         {
-            MeterData data;
-            data.voltageL1 = voltage_l1->state;
-            data.voltageL2 = voltage_l2->state;
-            data.voltageL3 = voltage_l3->state;
-            data.currentL1 = current_l1->state;
-            data.currentL2 = current_l2->state;
-            data.currentL3 = current_l3->state;
-            data.activePowerPlus = active_power_plus->state;
-            data.activePowerMinus = active_power_minus->state;
-            data.activeEnergyPlus = active_energy_plus->state;
-            data.activeEnergyMinus = active_energy_minus->state;
-            data.reactiveEnergyPlus = reactive_energy_plus->state;
-            data.reactiveEnergyMinus = reactive_energy_minus->state;
-            m_onReceiveMeterData(data);
+            m_onReceiveMeterData(m_meterData);
         }
     }
 }
@@ -497,37 +431,6 @@ void DlmsMeter::set_key(uint8_t key[], size_t keyLength)
     // Important: Ensure no more than 16bytes.
     memcpy(&this->key[0], &key[0], keyLength);
     this->keyLength = keyLength;
-}
-
-void DlmsMeter::set_voltage_sensors(sensor::Sensor* voltage_l1, sensor::Sensor* voltage_l2, sensor::Sensor* voltage_l3)
-{
-    this->voltage_l1 = voltage_l1;
-    this->voltage_l2 = voltage_l2;
-    this->voltage_l3 = voltage_l3;
-}
-void DlmsMeter::set_current_sensors(sensor::Sensor* current_l1, sensor::Sensor* current_l2, sensor::Sensor* current_l3)
-{
-    this->current_l1 = current_l1;
-    this->current_l2 = current_l2;
-    this->current_l3 = current_l3;
-}
-
-void DlmsMeter::set_active_power_sensors(sensor::Sensor* active_power_plus, sensor::Sensor* active_power_minus)
-{
-    this->active_power_plus = active_power_plus;
-    this->active_power_minus = active_power_minus;
-}
-
-void DlmsMeter::set_active_energy_sensors(sensor::Sensor* active_energy_plus, sensor::Sensor* active_energy_minus)
-{
-    this->active_energy_plus = active_energy_plus;
-    this->active_energy_minus = active_energy_minus;
-}
-
-void DlmsMeter::set_reactive_energy_sensors(sensor::Sensor* reactive_energy_plus, sensor::Sensor* reactive_energy_minus)
-{
-    this->reactive_energy_plus = reactive_energy_plus;
-    this->reactive_energy_minus = reactive_energy_minus;
 }
 
 #if defined(USE_MQTT)

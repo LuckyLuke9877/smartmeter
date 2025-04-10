@@ -47,25 +47,8 @@ public:
         set_internal(true);
 
         // 0x38, 0x68, 0x68, 0x69, 0x71, 0x7A, 0x32, 0x45, 0x6B, 0x75, 0x53, 0x48, 0x53, 0x4B, 0x51, 0x37
-        uint8_t key[] = {0x38, 0x68, 0x68, 0x69, 0x71, 0x7A, 0x32, 0x45, 0x6B, 0x75, 0x53, 0x48, 0x53, 0x4B, 0x51, 0x37};
+        uint8_t key[] = { 0x38, 0x68, 0x68, 0x69, 0x71, 0x7A, 0x32, 0x45, 0x6B, 0x75, 0x53, 0x48, 0x53, 0x4B, 0x51, 0x37 };
         m_dlmsMeter.set_key(key, 16); // Pass your decryption key and key length here
-
-        m_dlmsMeter.set_voltage_sensors(&id(voltage_l1), &id(voltage_l2),
-                                        &id(voltage_l3)); // Set sensors to use for voltage (optional)
-
-        m_dlmsMeter.set_current_sensors(&id(current_l1), &id(current_l2),
-                                        &id(current_l3)); // Set sensors to use for current (optional)
-
-        m_dlmsMeter.set_active_power_sensors(
-            &id(active_power_plus),
-            &id(active_power_minus)); // Set sensors to use for active power (optional)
-
-        m_dlmsMeter.set_active_energy_sensors(
-            &id(active_energy_plus),
-            &id(active_energy_minus)); // Set sensors to use for active energy (optional)
-        m_dlmsMeter.set_reactive_energy_sensors(
-            &id(reactive_energy_plus),
-            &id(reactive_energy_minus)); // Set sensors to use for reactive energy (optional)
 
         m_dlmsMeter.RegisterForMeterData([this](const espdm::DlmsMeter::MeterData& data) {
             OnReceiveMeterData(data);
@@ -132,6 +115,20 @@ public:
 
         data.GetReactivePower(total, value1, value2, value3);
         m_meterModel.SetReactivePower(total, value1, value2, value3);
+
+        // Set other GUI sensors
+        id(active_power_plus).publish_state(data.activePowerPlus);
+        id(active_power_minus).publish_state(data.activePowerMinus);
+        id(active_energy_plus).publish_state(data.activeEnergyPlus);
+        id(active_energy_minus).publish_state(data.activeEnergyMinus);
+        id(reactive_energy_plus).publish_state(data.reactiveEnergyPlus);
+        id(reactive_energy_minus).publish_state(data.reactiveEnergyMinus);
+
+        char temp[64] = { 0 };
+        sprintf(temp, "%5.1f/%5.1f/%5.1f V", data.voltageL1, data.voltageL2, data.voltageL3);
+        id(voltage).publish_state(temp);
+        sprintf(temp, "%5.1f/%5.1f/%5.1f A", data.currentL1, data.currentL2, data.currentL3);
+        id(current).publish_state(temp);
 
         SetEnergyFlow();
         SetEspStatus();
@@ -202,7 +199,7 @@ public:
         for (int idx = startIdx; idx > startIdx - 6; idx--)
         {
             const auto energyDiff = m_energyDays[GetDayOfWeekIdx(idx)].GetDifference(m_energyDays[GetDayOfWeekIdx(idx - 1)]);
-            char temp[64] = {0};
+            char temp[64] = { 0 };
             sprintf(temp, "%7.3f|\n", energyDiff.ReceivedKwh - energyDiff.ProvidedKwh);
 
             weekValues += energyDiff.ToString() + temp;
@@ -245,8 +242,8 @@ public:
 private:
     struct ElectricEnergy
     {
-        float ReceivedKwh{0.0f}; // Bezug
-        float ProvidedKwh{0.0f}; // Einspeisung
+        float ReceivedKwh{ 0.0f }; // Bezug
+        float ProvidedKwh{ 0.0f }; // Einspeisung
 
         ElectricEnergy GetDifference(const ElectricEnergy& other) const
         {
@@ -261,7 +258,7 @@ private:
         }
         std::string ToString() const
         {
-            char temp[64] = {0};
+            char temp[64] = { 0 };
             sprintf(temp, "|%7.3f|%7.3f|", ReceivedKwh, ProvidedKwh);
             return temp;
         }
@@ -272,7 +269,7 @@ private:
     sunspec::MeterModel m_meterModel;
     byd::BatteryModel m_batteryModel;
     utils::Stopwatch m_uptime;
-    uint32_t m_statusLedBlinkCount{0};
+    uint32_t m_statusLedBlinkCount{ 0 };
     std::array<ElectricEnergy, 7> m_energyDays;
 
     void SetStatusLed(bool on, bool error = false)
@@ -313,10 +310,10 @@ private:
         begin.day_of_month = static_cast<uint32_t>(id(energy_day_begin).state + preventCastError);
         begin.month = static_cast<uint32_t>(id(energy_month_begin).state + preventCastError);
         begin.year = static_cast<uint32_t>(id(energy_year_begin).state + preventCastError);
-        std::string duration{"--"};
-        char plus[32] = {"--"};
-        char minus[32] = {"--"};
-        char sum[32] = {"--"};
+        std::string duration{ "--" };
+        char plus[32] = { "--" };
+        char minus[32] = { "--" };
+        char sum[32] = { "--" };
         auto now = id(sntp_time).now();
         if (now.is_valid())
         {
@@ -336,7 +333,7 @@ private:
                 duration = GetTimespanString(now.timestamp - begin.timestamp);
 
                 // Plus
-                char temp[64] = {0};
+                char temp[64] = { 0 };
                 const auto plus_diff = id(active_energy_plus).state - id(energy_plus_begin).state;
                 sprintf(plus, "%.3fkWh", plus_diff);
 
@@ -366,7 +363,7 @@ private:
         timespan -= hours * secPerHour;
         const int minutes = timespan / secPerMinute;
         timespan -= minutes * secPerMinute;
-        char temp[64] = {0};
+        char temp[64] = { 0 };
         sprintf(temp, "%dd %02d:%02d:%02d", days, hours, minutes, timespan);
 
         return temp;

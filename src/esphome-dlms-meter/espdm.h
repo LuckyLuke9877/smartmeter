@@ -100,12 +100,6 @@ public:
     void setup() override;
     void loop() override;
 
-    void set_voltage_sensors(sensor::Sensor* voltage_l1, sensor::Sensor* voltage_l2, sensor::Sensor* voltage_l3);
-    void set_current_sensors(sensor::Sensor* current_l1, sensor::Sensor* current_l2, sensor::Sensor* current_l3);
-
-    void set_active_power_sensors(sensor::Sensor* active_power_plus, sensor::Sensor* active_power_minus);
-    void set_active_energy_sensors(sensor::Sensor* active_energy_plus, sensor::Sensor* active_energy_minus);
-    void set_reactive_energy_sensors(sensor::Sensor* reactive_energy_plus, sensor::Sensor* reactive_energy_minus);
 #if defined(USE_MQTT)
     void set_timestamp_sensor(text_sensor::TextSensor* timestamp);
 
@@ -118,6 +112,7 @@ public:
 private:
     MbusProtocol m_mbus;
     std::vector<uint8_t> m_dlmsData;
+    MeterData m_meterData;
 
     uint8_t key[16]; // Stores the decryption key
     size_t keyLength; // Stores the decryption key length (usually 16 bytes)
@@ -125,23 +120,6 @@ private:
 #if defined(ESP32)
     mbedtls_gcm_context aes; // AES context used for decryption
 #endif
-
-    sensor::Sensor* voltage_l1 = NULL; // Voltage L1
-    sensor::Sensor* voltage_l2 = NULL; // Voltage L2
-    sensor::Sensor* voltage_l3 = NULL; // Voltage L3
-
-    sensor::Sensor* current_l1 = NULL; // Current L1
-    sensor::Sensor* current_l2 = NULL; // Current L2
-    sensor::Sensor* current_l3 = NULL; // Current L3
-
-    sensor::Sensor* active_power_plus = NULL; // Active power taken from grid
-    sensor::Sensor* active_power_minus = NULL; // Active power put into grid
-
-    sensor::Sensor* active_energy_plus = NULL; // Active energy taken from grid
-    sensor::Sensor* active_energy_minus = NULL; // Active energy put into grid
-
-    sensor::Sensor* reactive_energy_plus = NULL; // Reactive energy taken from grid
-    sensor::Sensor* reactive_energy_minus = NULL; // Reactive energy put into grid
 
 #if defined(USE_MQTT)
     text_sensor::TextSensor* timestamp = NULL; // Text sensor for the timestamp value

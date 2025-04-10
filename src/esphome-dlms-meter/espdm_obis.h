@@ -1,3 +1,4 @@
+#include <cstdint>
 /*
  * Data types as per specification
  */
@@ -40,24 +41,24 @@ enum Medium
     Water = 0x08
 };
 
-enum CodeType
+enum CodeType : uint16_t
 {
-    Unknown,
-    Timestamp,
-    SerialNumber,
-    DeviceName,
-    VoltageL1,
-    VoltageL2,
-    VoltageL3,
-    CurrentL1,
-    CurrentL2,
-    CurrentL3,
-    ActivePowerPlus,
-    ActivePowerMinus,
-    ActiveEnergyPlus,
-    ActiveEnergyMinus,
-    ReactiveEnergyPlus,
-    ReactiveEnergyMinus
+    Unknown = 0x0000,
+    Timestamp = 0x0001,
+    SerialNumber = 0x0160,
+    DeviceName = 0x002A,
+    VoltageL1 = 0x0720,
+    VoltageL2 = 0x0734,
+    VoltageL3 = 0x0748,
+    CurrentL1 = 0x071F,
+    CurrentL2 = 0x0733,
+    CurrentL3 = 0x0747,
+    ActivePowerPlus = 0x0701,
+    ActivePowerMinus = 0x0702,
+    ActiveEnergyPlus = 0x0801,
+    ActiveEnergyMinus = 0x0802,
+    ReactiveEnergyPlus = 0x0803,
+    ReactiveEnergyMinus = 0x0804
 };
 
 enum Accuracy
@@ -83,100 +84,3 @@ static const int OBIS_C = 2;
 static const int OBIS_D = 3;
 static const int OBIS_E = 4;
 static const int OBIS_F = 5;
-
-/*
- * Metadata
- */
-
-static uint8_t ESPDM_TIMESTAMP[]
-{
-    0x01, 0x00
-};
-
-static const uint8_t ESPDM_SERIAL_NUMBER[]
-{
-    0x60, 0x01
-};
-
-static const uint8_t ESPDM_DEVICE_NAME[]
-{
-    0x2A, 0x00
-};
-
-/*
- * Voltage
- */
-
-static uint8_t ESPDM_VOLTAGE_L1[]
-{
-    0x20, 0x07
-};
-
-static const uint8_t ESPDM_VOLTAGE_L2[]
-{
-    0x34, 0x07
-};
-
-static const uint8_t ESPDM_VOLTAGE_L3[]
-{
-    0x48, 0x07
-};
-
-/*
- * Current
- */
-
-static const uint8_t ESPDM_CURRENT_L1[]
-{
-    0x1F, 0x07
-};
-
-static const uint8_t ESPDM_CURRENT_L2[]
-{
-    0x33, 0x07
-};
-
-static const uint8_t ESPDM_CURRENT_L3[]
-{
-    0x47, 0x07
-};
-
-/*
- * Power
- */
-
-static const uint8_t ESPDM_ACTIVE_POWER_PLUS[]
-{
-    0x01, 0x07
-};
-
-static const uint8_t ESPDM_ACTIVE_POWER_MINUS[]
-{
-    0x02, 0x07
-};
-
-/*
- * Active energy
- */
-
-static const uint8_t ESPDM_ACTIVE_ENERGY_PLUS[]
-{
-    0x01, 0x08
-};
-static const uint8_t ESPDM_ACTIVE_ENERGY_MINUS[]
-{
-    0x02, 0x08
-};
-
-/*
- * Reactive energy
- */
-
-static const uint8_t ESPDM_REACTIVE_ENERGY_PLUS[]
-{
-    0x03, 0x08
-};
-static const uint8_t ESPDM_REACTIVE_ENERGY_MINUS[]
-{
-    0x04, 0x08
-};
