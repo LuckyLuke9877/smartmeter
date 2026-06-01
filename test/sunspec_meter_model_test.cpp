@@ -8,7 +8,6 @@ using namespace testutils;
 namespace
 {
 
-constexpr uint8_t MODBUS_ADDRESS = 0x01;
 constexpr auto VALUE1 = 1.1f;
 constexpr auto VALUE2 = 22.22f;
 constexpr auto VALUE3 = 333.333f;
@@ -28,7 +27,7 @@ protected:
         ASSERT_EQ(ToFloatLittleEndian(&reg[6]), VALUE4);
     }
 
-    MeterModel m_meter{MODBUS_ADDRESS};
+    MeterModel m_meter;
 };
 
 TEST_F(SunspecMeterModelTest, Constructor_InitializedRegisters)
@@ -42,17 +41,16 @@ TEST_F(SunspecMeterModelTest, Constructor_InitializedRegisters)
     ASSERT_EQ(__builtin_bswap32(*(uint32_t*)&reg[0]), 0x53756e53); // same test as before
     ASSERT_EQ(__builtin_bswap16(reg[2]), 1);
     ASSERT_EQ(__builtin_bswap16(reg[3]), 65);
-    ASSERT_EQ(__builtin_bswap16(reg[4]), 0x3A29); // ":)"
-    ASSERT_EQ(IsEqualString(&reg[20], "Kai2SunMod"), true);
-    ASSERT_EQ(__builtin_bswap16(reg[68]), MODBUS_ADDRESS);
+    ASSERT_EQ(IsEqualString(&reg[4], "Fronius"), true);
+    ASSERT_EQ(IsEqualString(&reg[20], "Smart Meter 63A"), true);
+    ASSERT_EQ(IsEqualString(&reg[36], "<primary>"), true);
+    ASSERT_EQ(IsEqualString(&reg[44], "1.0"), true);
+    ASSERT_EQ(IsEqualString(&reg[52], "18370117"), true);
+    ASSERT_EQ(__builtin_bswap16(reg[68]), 240);
     ASSERT_EQ(__builtin_bswap16(reg[69]), 213);
     ASSERT_EQ(__builtin_bswap16(reg[70]), 124);
     ASSERT_EQ(__builtin_bswap16(reg[195]), 0xFFFF);
     ASSERT_EQ(__builtin_bswap16(reg[196]), 0);
-    for (size_t i = 47; i < 68; i++)
-    {
-        ASSERT_EQ(reg[i], 0);
-    }
     for (size_t i = 71; i < 195; i++)
     {
         ASSERT_EQ(reg[i], 0);
@@ -184,6 +182,42 @@ TEST_F(SunspecMeterModelTest, Read_InvalidCount_ReturnsError)
     const auto address = sunspec::REGISTER_OFFSET;
     const auto count = sunspec::REGISTER_TOTAL_COUNT + 1;
     std::vector<uint8_t> data(count * sizeof(uint16_t));
+    ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::IllegalAddress);
+}
+
+TEST_F(SunspecMeterModelTest, Read_ValidAddress768_ReturnsOk)
+{
+    const auto address = 768;
+    const auto count = 1;
+    std::vector<uint8_t> data(count * modb::REGISTER_SIZE);
+    ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::None);
+    ASSERT_EQ(data[0], 0);
+    ASSERT_EQ(data[1], 0);
+}
+
+TEST_F(SunspecMeterModelTest, Read_InvalidAddress768Count_ReturnsError)
+{
+    const auto address = 768;
+    const auto count = 2;
+    std::vector<uint8_t> data(count * modb::REGISTER_SIZE);
+    ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::IllegalAddress);
+}
+
+TEST_F(SunspecMeterModelTest, Read_ValidAddress1706_ReturnsOk)
+{
+    const auto address = 1706;
+    const auto count = 1;
+    std::vector<uint8_t> data(count * modb::REGISTER_SIZE);
+    ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::None);
+    ASSERT_EQ(data[0], 0);
+    ASSERT_EQ(data[1], 0);
+}
+
+TEST_F(SunspecMeterModelTest, Read_InvalidAddress1706Count_ReturnsError)
+{
+    const auto address = 1706;
+    const auto count = 2;
+    std::vector<uint8_t> data(count * modb::REGISTER_SIZE);
     ASSERT_EQ(m_meter.Read(address, count, &data[0]), modb::ResponseError::IllegalAddress);
 }
 
