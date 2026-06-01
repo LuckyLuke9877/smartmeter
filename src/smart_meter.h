@@ -30,7 +30,6 @@ public:
             return OnModbusReceiveRequest(request);
         })
         , m_dlmsMeter(uartMbus)
-        , m_meterModel(SMART_METER_ADDRESS)
     {
         // test-hack
         // const auto beginPlus = 16481.152f;
